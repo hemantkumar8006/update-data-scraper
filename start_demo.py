@@ -1,15 +1,8 @@
-#!/usr/bin/env python3
-"""
-Startup script to run both the demo server and the main scraper server
-This provides a complete demo environment for testing the notification system
-"""
-
 import subprocess
 import sys
 import time
 import threading
 import os
-from pathlib import Path
 
 def run_demo_server():
     """Run the demo HTTP server"""

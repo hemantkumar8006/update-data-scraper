@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Demo Scraper for monitoring the local HTML demo page
-This scraper monitors the demo_notifications.html file for changes and extracts notifications
-"""
-
 import json
 import os
 import time

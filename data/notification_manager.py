@@ -1,20 +1,15 @@
-#!/usr/bin/env python3
-"""
-Notification Manager for handling updated notifications
-This system manages the updated_notifications.json file and compares new data with existing data
-"""
-
 import json
 import os
 import sys
-import hashlib
 from datetime import datetime
 from typing import Dict, List, Any, Set
 try:
     from .storage import DataStorage
+    from ..utils.webhook_service import create_webhook_service
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from data.storage import DataStorage
+    from utils.webhook_service import create_webhook_service
 
 
 class NotificationManager:
@@ -26,10 +21,26 @@ class NotificationManager:
         self.main_data_file = "data/exam_data.json"
         self.backup_dir = "data/backups"
         
+        # Initialize webhook service
+        self.webhook_service = create_webhook_service()
+        
+        # Initialize notification queue (lazy import to avoid circular dependency)
+        self.notification_queue = None
+        
         # Ensure directories exist
         os.makedirs(os.path.dirname(self.notification_file), exist_ok=True)
         os.makedirs(os.path.dirname(self.main_data_file), exist_ok=True)
         os.makedirs(self.backup_dir, exist_ok=True)
+    
+    def _get_notification_queue(self):
+        """Get notification queue with lazy initialization"""
+        if self.notification_queue is None:
+            try:
+                from .notification_queue import create_notification_queue
+            except ImportError:
+                from data.notification_queue import create_notification_queue
+            self.notification_queue = create_notification_queue(self)
+        return self.notification_queue
     
     def get_existing_data(self) -> Dict[str, Any]:
         """Get existing data from the main exam_data.json file"""
@@ -158,16 +169,67 @@ class NotificationManager:
             print(f"❌ Error saving notifications: {e}")
             raise
     
+    def send_webhook_notifications(self, notifications: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Send notifications to webhook API
+        
+        Args:
+            notifications: List of notification dictionaries
+            
+        Returns:
+            Dictionary with webhook results
+        """
+        if not notifications:
+            return {
+                "success": True,
+                "message": "No notifications to send",
+                "webhook_results": []
+            }
+        
+        try:
+            print(f"📤 Sending {len(notifications)} notifications to webhook...")
+            
+            # Send notifications to webhook
+            webhook_results = self.webhook_service.send_batch_notifications(notifications)
+            
+            # Log results
+            successful = webhook_results["successful"]
+            failed = webhook_results["failed"]
+            
+            if successful > 0:
+                print(f"✅ {successful} notifications sent to webhook successfully")
+            
+            if failed > 0:
+                print(f"⚠️  {failed} notifications failed to send to webhook")
+            
+            return {
+                "success": failed == 0,  # Success if no failures
+                "message": f"Sent {successful}/{len(notifications)} notifications to webhook",
+                "webhook_results": webhook_results
+            }
+            
+        except Exception as e:
+            print(f"❌ Error sending webhook notifications: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "webhook_results": []
+            }
+    
     def save_main_data(self, data: Dict[str, Any]) -> None:
         """Save main data to exam_data.json with backup"""
-        # Create backup of existing file
-        if os.path.exists(self.main_data_file):
+        # Create backup of existing file (only if it exists and has content)
+        if os.path.exists(self.main_data_file) and os.path.getsize(self.main_data_file) > 0:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_file = os.path.join(self.backup_dir, f"exam_data_backup_{timestamp}.json")
             try:
                 import shutil
                 shutil.copy2(self.main_data_file, backup_file)
                 print(f"📁 Backup created: {backup_file}")
+                
+                # Clean up old backups (keep only last 5)
+                self.cleanup_old_backups()
+                
             except Exception as e:
                 print(f"⚠️  Backup failed: {e}")
         
@@ -179,6 +241,58 @@ class NotificationManager:
         except Exception as e:
             print(f"❌ Error saving main data: {e}")
             raise
+    
+    def cleanup_old_backups(self, keep_count: int = 5) -> None:
+        """Clean up old backup files, keeping only the most recent ones"""
+        try:
+            if not os.path.exists(self.backup_dir):
+                return
+            
+            # Get all backup files
+            backup_files = []
+            for filename in os.listdir(self.backup_dir):
+                if filename.startswith("exam_data_backup_") and filename.endswith(".json"):
+                    file_path = os.path.join(self.backup_dir, filename)
+                    backup_files.append((file_path, os.path.getmtime(file_path)))
+            
+            # Sort by modification time (newest first)
+            backup_files.sort(key=lambda x: x[1], reverse=True)
+            
+            # Remove old backups (keep only the most recent ones)
+            if len(backup_files) > keep_count:
+                files_to_remove = backup_files[keep_count:]
+                for file_path, _ in files_to_remove:
+                    try:
+                        os.remove(file_path)
+                        print(f"🗑️  Removed old backup: {os.path.basename(file_path)}")
+                    except Exception as e:
+                        print(f"⚠️  Failed to remove backup {file_path}: {e}")
+                        
+        except Exception as e:
+            print(f"⚠️  Error during backup cleanup: {e}")
+    
+    def cleanup_all_backups(self) -> None:
+        """Remove all backup files (use with caution)"""
+        try:
+            if not os.path.exists(self.backup_dir):
+                print("📁 No backup directory found")
+                return
+            
+            removed_count = 0
+            for filename in os.listdir(self.backup_dir):
+                if filename.startswith("exam_data_backup_") and filename.endswith(".json"):
+                    file_path = os.path.join(self.backup_dir, filename)
+                    try:
+                        os.remove(file_path)
+                        removed_count += 1
+                        print(f"🗑️  Removed backup: {filename}")
+                    except Exception as e:
+                        print(f"⚠️  Failed to remove {filename}: {e}")
+            
+            print(f"✅ Cleanup complete: {removed_count} backup files removed")
+            
+        except Exception as e:
+            print(f"❌ Error during backup cleanup: {e}")
     
     def process_new_scraped_data(self, new_updates: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -349,15 +463,47 @@ class NotificationManager:
         if result['notification_data']['total_new_notifications'] > 0:
             self.save_notifications(result['notification_data'])
             print(f"✅ New notifications saved: {result['notification_data']['total_new_notifications']} items")
+            
+            # Automatically send webhook notifications for new updates
+            self._send_webhook_for_new_notifications(result['notification_data'])
         else:
             print("ℹ️  No new notifications to save")
         
         return result
     
+    def _send_webhook_for_new_notifications(self, notification_data: Dict[str, Any]) -> None:
+        """
+        Automatically send webhook notifications for new updates using queue system
+        
+        Args:
+            notification_data: Dictionary containing new notifications
+        """
+        try:
+            # Collect all notifications from different exam types
+            notifications = []
+            for exam_type in ['jee', 'gate', 'jee_adv', 'upsc']:
+                if exam_type in notification_data and notification_data[exam_type]:
+                    notifications.extend(notification_data[exam_type])
+            
+            if notifications:
+                print(f"📤 Adding {len(notifications)} new notifications to webhook queue...")
+                
+                # Add notifications to queue for processing
+                queue = self._get_notification_queue()
+                notification_ids = queue.add_batch_notifications(notifications, "auto_scrape")
+                
+                print(f"✅ Added {len(notification_ids)} notifications to webhook queue")
+            else:
+                print("ℹ️  No notifications to send via webhook")
+                
+        except Exception as e:
+            print(f"❌ Error adding notifications to webhook queue: {e}")
+    
     def get_status(self) -> Dict[str, Any]:
         """Get current status of the notification system"""
         main_data = self.get_existing_data()
         notification_data = self.get_notification_data()
+        queue_status = self._get_notification_queue().get_queue_status()
         
         return {
             'main_file_exists': os.path.exists(self.main_data_file),
@@ -376,9 +522,18 @@ class NotificationManager:
                 'upsc': len(notification_data.get('upsc', [])),
                 'total': notification_data.get('total_new_notifications', 0)
             },
+            'queue_status': queue_status,
             'last_updated': main_data.get('last_updated'),
             'last_scrape': main_data.get('last_scrape')
         }
+    
+    def get_queue_status(self) -> Dict[str, Any]:
+        """Get notification queue status"""
+        return self._get_notification_queue().get_queue_status()
+    
+    def clear_queue(self) -> None:
+        """Clear the notification queue"""
+        self._get_notification_queue().clear_queue()
 
 
 def main():
@@ -395,7 +550,7 @@ def main():
     
     try:
         if args.action == 'init':
-            result = manager.initial_scrape_and_setup()
+            manager.initial_scrape_and_setup()
             print(f"\n🎉 Initial setup completed!")
             
         elif args.action == 'clear':

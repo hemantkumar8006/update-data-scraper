@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 import logging
 from abc import ABC, abstractmethod
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from config.settings import REQUEST_TIMEOUT, MAX_RETRIES, USER_AGENT
 
 
@@ -144,7 +144,7 @@ class BaseScraper(ABC):
                 try:
                     if len(match.groups()) == 3:
                         # Try to parse the matched date
-                        date_parts = match.groups()
+                        match.groups()
                         # This is a simplified date parsing - in production, use dateutil.parser
                         return date_str  # Return original for now
                 except:
@@ -196,4 +196,3 @@ class BaseScraper(ABC):
     @abstractmethod
     def scrape(self):
         """Main scraping method to be implemented by subclasses"""
-        pass

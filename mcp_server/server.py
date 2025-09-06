@@ -10,7 +10,6 @@ from scrapers import (
 from data.storage import DataStorage
 from data.notification_manager import NotificationManager
 from .scheduler import Scheduler
-from config.settings import SCRAPE_INTERVAL
 
 class MCPExamScrapingServer:
     def __init__(self):

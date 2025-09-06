@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Simple HTTP server to serve the demo notifications HTML file
-This allows the demo scraper to monitor the HTML file via HTTP
-"""
-
 import http.server
 import socketserver
 import os

@@ -490,6 +490,41 @@
           </div>
 
           <div style="margin-bottom: 20px">
+            <h3>Webhook Integration</h3>
+            <button
+              class="btn btn-info"
+              onclick="sendWebhookNotifications()"
+              id="webhookBtn"
+            >
+              <span id="webhookBtnText">📤 Send to Bot</span>
+            </button>
+            <button
+              class="btn btn-secondary"
+              onclick="testWebhook()"
+              id="testWebhookBtn"
+            >
+              <span id="testWebhookBtnText">🧪 Test Webhook</span>
+            </button>
+            <button
+              class="btn btn-warning"
+              onclick="clearNotificationQueue()"
+              id="clearQueueBtn"
+            >
+              <span id="clearQueueBtnText">🗑️ Clear Queue</span>
+            </button>
+          </div>
+
+          <div style="margin-bottom: 20px">
+            <h3>Notification Queue Status</h3>
+            <div id="queueStatus">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <span class="status-indicator status-stopped"></span>
+                <span>Loading queue status...</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 20px">
             <h3>System Status</h3>
             <div id="systemStatus">
               <span class="status-indicator status-stopped"></span>
@@ -552,6 +587,7 @@
         setInterval(loadSystemStatus, 30000); // Every 30 seconds
         setInterval(loadRecentNotifications, 60000); // Every minute
         setInterval(loadStats, 30000); // Every 30 seconds
+        setInterval(loadQueueStatus, 10000); // Every 10 seconds
 
         // Set up real-time notification streaming
         setupNotificationStream();
@@ -746,6 +782,60 @@
         }
       }
 
+      // Load queue status
+      async function loadQueueStatus() {
+        try {
+          const response = await fetch("/notifications/queue/status");
+          const data = await response.json();
+
+          if (data.success) {
+            const queueStatus = data.queue_status;
+            const statusElement = document.getElementById("queueStatus");
+
+            const totalPending = queueStatus.status_counts?.pending || 0;
+            const totalSending = queueStatus.status_counts?.sending || 0;
+            const totalSent = queueStatus.status_counts?.sent || 0;
+            const totalFailed = queueStatus.status_counts?.failed || 0;
+            const totalRetry = queueStatus.status_counts?.retry || 0;
+
+            let statusText = "";
+            let statusClass = "status-stopped";
+
+            if (totalPending > 0 || totalSending > 0 || totalRetry > 0) {
+              statusClass = "status-running";
+              statusText = `Processing: ${totalPending} pending, ${totalSending} sending, ${totalRetry} retry`;
+            } else if (totalSent > 0) {
+              statusClass = "status-running";
+              statusText = `Completed: ${totalSent} sent`;
+            } else if (totalFailed > 0) {
+              statusClass = "status-error";
+              statusText = `Failed: ${totalFailed} failed`;
+            } else {
+              statusText = "Queue empty";
+            }
+
+            statusElement.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="status-indicator ${statusClass}"></span>
+                <span>${statusText}</span>
+              </div>
+              <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">
+                Queue size: ${queueStatus.queue_size || 0} | 
+                Processing: ${queueStatus.processing ? "Yes" : "No"}
+              </div>
+            `;
+          }
+        } catch (error) {
+          console.error("Error loading queue status:", error);
+          document.getElementById("queueStatus").innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="status-indicator status-error"></span>
+              <span>Error loading queue status</span>
+            </div>
+          `;
+        }
+      }
+
       // Run scrape
       async function runScrape() {
         if (isScraping) return;
@@ -898,6 +988,158 @@
           hour: "2-digit",
           minute: "2-digit",
         });
+      }
+
+      // Send notifications to webhook
+      async function sendWebhookNotifications() {
+        const webhookBtn = document.getElementById("webhookBtn");
+        const webhookBtnText = document.getElementById("webhookBtnText");
+
+        // Disable button and show loading
+        webhookBtn.disabled = true;
+        webhookBtnText.textContent = "📤 Sending...";
+
+        try {
+          const response = await fetch("/notifications/send-webhook", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showToast(
+              `✅ ${result.message} (${result.notifications_sent} notifications sent)`,
+              "success"
+            );
+
+            // Show webhook results if available
+            if (result.webhook_results) {
+              const webhookResults = result.webhook_results;
+              if (webhookResults.successful > 0) {
+                showToast(
+                  `🤖 Bot delivered to ${webhookResults.successful} subscribers`,
+                  "success"
+                );
+              }
+              if (webhookResults.failed > 0) {
+                showToast(
+                  `⚠️ ${webhookResults.failed} notifications failed to deliver`,
+                  "warning"
+                );
+              }
+            }
+          } else {
+            showToast(
+              `❌ Webhook failed: ${result.error || result.message}`,
+              "error"
+            );
+          }
+        } catch (error) {
+          console.error("Error sending webhook notifications:", error);
+          showToast("Error sending webhook notifications", "error");
+        } finally {
+          // Re-enable button
+          webhookBtn.disabled = false;
+          webhookBtnText.textContent = "📤 Send to Bot";
+        }
+      }
+
+      // Test webhook connectivity
+      async function testWebhook() {
+        const testBtn = document.getElementById("testWebhookBtn");
+        const testBtnText = document.getElementById("testWebhookBtnText");
+
+        // Disable button and show loading
+        testBtn.disabled = true;
+        testBtnText.textContent = "🧪 Testing...";
+
+        try {
+          const response = await fetch("/webhook/test", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showToast(
+              "✅ Webhook test successful! Bot is reachable.",
+              "success"
+            );
+
+            // Show webhook response details
+            if (result.webhook_response) {
+              const webhookResp = result.webhook_response;
+              if (webhookResp.totalSubscribers) {
+                showToast(
+                  `🤖 Bot has ${webhookResp.totalSubscribers} subscribers`,
+                  "info"
+                );
+              }
+            }
+          } else {
+            showToast(
+              `❌ Webhook test failed: ${result.error || result.message}`,
+              "error"
+            );
+          }
+        } catch (error) {
+          console.error("Error testing webhook:", error);
+          showToast("Error testing webhook", "error");
+        } finally {
+          // Re-enable button
+          testBtn.disabled = false;
+          testBtnText.textContent = "🧪 Test Webhook";
+        }
+      }
+
+      // Clear notification queue
+      async function clearNotificationQueue() {
+        if (
+          !confirm(
+            "Are you sure you want to clear the notification queue? This will remove all pending webhook notifications."
+          )
+        ) {
+          return;
+        }
+
+        const clearBtn = document.getElementById("clearQueueBtn");
+        const clearBtnText = document.getElementById("clearQueueBtnText");
+
+        // Disable button and show loading
+        clearBtn.disabled = true;
+        clearBtnText.textContent = "🗑️ Clearing...";
+
+        try {
+          const response = await fetch("/notifications/queue/clear", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showToast("✅ Notification queue cleared successfully!", "success");
+            // Refresh queue status
+            loadQueueStatus();
+          } else {
+            showToast(`❌ Failed to clear queue: ${result.error}`, "error");
+          }
+        } catch (error) {
+          console.error("Error clearing queue:", error);
+          showToast("Error clearing notification queue", "error");
+        } finally {
+          // Re-enable button
+          clearBtn.disabled = false;
+          clearBtnText.textContent = "🗑️ Clear Queue";
+        }
       }
 
       // Set up real-time notification streaming

@@ -57,10 +57,17 @@ cp env.example .env
 Edit `.env` file with your API keys:
 
 ```env
-# API Keys
+# API Keys (at least one required)
+OPENAI_API_KEY=your_openai_api_key_here
+CLAUDE_API_KEY=your_claude_api_key_here
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Email Notifications (Disabled - focusing on data scraping only)
+# Email Notifications (Optional)
+NOTIFICATION_EMAIL=your_email@example.com
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
 
 # Environment
 ENVIRONMENT=development
@@ -96,63 +103,6 @@ Access the web dashboard at `http://localhost:5000` to:
 - Trigger manual scraping
 - Manage website configurations
 - View scraping statistics
-- **Demo Notification System**: Add and manage notifications in real-time
-
-## 🎯 Demo System Workflow
-
-The demo system provides a complete end-to-end example of how the notification system works:
-
-> 📖 **For detailed step-by-step instructions, see [DEMO.md](DEMO.md)**
-
-### Quick Demo Start
-
-### Step-by-Step Demo Process
-
-1. **Start the Demo System**
-
-   ```bash
-   # Option 1: Use the demo startup script (recommended)
-   python start_demo.py
-
-   # Option 2: Start manually
-   python main.py --mode server
-   ```
-
-2. **Access the Dashboard**
-
-   - Open http://localhost:5000
-   - Scroll down to the "Demo Notification System" section
-
-3. **Initialize the System**
-
-   - Click "Initialize Notifications" button
-   - This sets up the notification system and creates data files
-
-4. **Add Demo Notifications**
-
-   - Use the embedded demo interface to add notifications
-   - Fill in title, content, exam type, source, priority, URL, and date
-   - Click "Add Notification" - this saves to `demo_notifications.json`
-
-5. **Run the Scraper**
-
-   - Click "Run Scrape" button in the dashboard
-   - The `DemoScraper` reads from `demo_notifications.json`
-   - New notifications are saved to the SQLite database
-
-6. **View Results**
-   - New notifications appear in the dashboard
-   - Real-time statistics update
-   - Toast notifications show new items
-
-### How the Demo System Works
-
-1. **User Input**: Users add notifications via the demo HTML interface
-2. **Data Storage**: Notifications are saved to `demo_notifications.json`
-3. **Scraper Processing**: `DemoScraper` reads the JSON file and extracts notifications
-4. **Database Integration**: New notifications are saved to the SQLite database
-5. **Real-time Display**: Dashboard shows all notifications from the database
-6. **Live Updates**: Changes are reflected immediately in the dashboard
 
 ### API Endpoints
 
@@ -163,11 +113,15 @@ The demo system provides a complete end-to-end example of how the notification s
 - `POST /scrape` - Trigger manual scraping
 - `GET /websites` - List configured websites
 - `POST /websites/<name>/toggle` - Enable/disable website
+- `POST /backups/cleanup` - Clean up old backup files (keeps 5 most recent)
+- `POST /backups/cleanup-all` - Remove all backup files
+- `POST /notifications/send-webhook` - Send notifications to chatbot API
+- `POST /webhook/test` - Test webhook connectivity
 
 ## 📁 Project Structure
 
 ```
-Kapp-Data-Scraper/
+exam_scraper/
 ├── config/
 │   ├── settings.py          # Configuration settings
 │   └── websites.json        # Website configurations
@@ -175,31 +129,28 @@ Kapp-Data-Scraper/
 │   ├── base_scraper.py      # Base scraper class
 │   ├── nta_scraper.py       # NTA JEE Main scraper
 │   ├── jee_advanced_scraper.py
+│   ├── cat_scraper.py       # CAT IIM scraper
 │   ├── gate_scraper.py      # GATE scraper
-│   ├── upsc_scraper.py      # UPSC scraper
-│   └── demo_scraper.py      # Demo scraper for testing
+│   └── upsc_scraper.py      # UPSC scraper
+├── ai_processors/
+│   ├── base_processor.py    # AI processor with fallback
+│   ├── openai_processor.py  # OpenAI integration
+│   ├── claude_processor.py  # Claude integration
+│   └── gemini_processor.py  # Gemini integration
 ├── data/
-│   ├── storage.py           # Database management
-│   ├── notification_manager.py  # Notification system
-│   ├── exam_data.json       # Main data file
-│   └── exam_updates.db      # SQLite database
+│   └── storage.py           # Database and storage management
 ├── mcp_server/
 │   ├── server.py            # Main server logic
 │   └── scheduler.py         # Scheduling system
-├── templates/
-│   └── dashboard.html       # Web dashboard
 ├── utils/
 │   ├── helpers.py           # Utility functions
 │   └── logger.py            # Logging utilities
-├── demo_notifications.html  # Demo notification interface
-├── demo_notifications.json  # Demo data storage
-├── demo_server.py           # Demo HTTP server
+├── tests/                   # Test files
+├── logs/                    # Log files
+├── data/                    # Database and backups
 ├── main.py                  # Main application entry point
-├── start.py                 # Alternative startup script
-├── start_demo.py            # Demo system startup script
 ├── requirements.txt         # Python dependencies
-├── README.md               # This file
-└── DEMO.md                 # Step-by-step demo guide
+└── README.md               # This file
 ```
 
 ## ⚙️ Configuration
@@ -259,6 +210,135 @@ The system includes comprehensive logging and monitoring:
 - Performance metrics tracking
 - Error rate monitoring
 - Database health checks
+
+## 🐳 Docker Deployment
+
+### Dockerfile
+
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+
+EXPOSE 5000
+
+CMD ["python", "main.py", "--mode", "server", "--port", "5000"]
+```
+
+### Docker Compose
+
+```yaml
+version: "3.8"
+
+services:
+  exam-scraper:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: unless-stopped
+```
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=.
+
+# Run specific test file
+pytest tests/test_scrapers.py
+```
+
+## 🗂️ Backup Management
+
+The system automatically creates backups of `exam_data.json` before each update. To manage backups:
+
+### Automatic Cleanup
+
+- System keeps only the 5 most recent backups
+- Old backups are automatically removed during data updates
+
+### Manual Cleanup
+
+```bash
+# Keep 5 most recent backups (default)
+python cleanup_backups.py
+
+# Keep only 3 most recent backups
+python cleanup_backups.py 3
+
+# Remove all backup files
+python cleanup_backups.py --all
+```
+
+### API Cleanup
+
+```bash
+# Clean up old backups via API
+curl -X POST http://localhost:5000/backups/cleanup
+
+# Remove all backups via API
+curl -X POST http://localhost:5000/backups/cleanup-all
+```
+
+## 🤖 Webhook Integration
+
+The system integrates with a chatbot API to send notifications automatically:
+
+### Webhook Configuration
+
+- **URL**: `https://notification-bot-1757186587.loca.lt/webhook/notification`
+- **Secret**: `notif_webhook_2025_secure_key_123`
+- **Format**: JSON with title, content, notificationType, and metadata
+
+### Dashboard Controls
+
+- **Send to Bot**: Sends all current notifications to the chatbot API
+- **Test Webhook**: Tests connectivity and shows subscriber count
+- **Real-time Feedback**: Toast notifications show delivery status
+
+### Webhook Payload Format
+
+```json
+{
+  "title": "JEE Main 2024 Registration Open",
+  "content": "Registration for JEE Main 2024 is now open...",
+  "notificationType": "exam_updates",
+  "metadata": {
+    "examName": "JEE Main",
+    "examDate": "2024-01-15",
+    "priority": "high",
+    "source": "NTA"
+  }
+}
+```
+
+### API Usage
+
+```bash
+# Send notifications to webhook
+curl -X POST http://localhost:5000/notifications/send-webhook
+
+# Test webhook connectivity
+curl -X POST http://localhost:5000/webhook/test
+```
 
 ## 📊 Monitoring
 
@@ -334,11 +414,13 @@ The system automatically handles:
 
 ## 📈 Roadmap
 
-- [x] Data scraping and storage
+- [ ] Email notifications
+- [ ] Webhook integrations
 - [ ] Advanced analytics dashboard
 - [ ] Mobile app integration
 - [ ] Machine learning for content classification
 - [ ] Multi-language support
+- [ ] Cloud deployment templates
 
 ---
 

@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
-
 import argparse
 import sys
 import threading
 import logging
 import json
 import time
+import os
 from datetime import datetime
 from flask import Flask, jsonify, request, render_template
 from mcp_server.server import MCPExamScrapingServer
@@ -15,6 +14,7 @@ from config.settings import WEB_HOST, WEB_PORT
 def create_web_interface(server_instance=None):
     """Create a modern web interface for monitoring"""
     app = Flask(__name__, template_folder='templates')
+    logger = logging.getLogger(__name__)
     
     @app.route('/')
     def index():
@@ -35,11 +35,41 @@ def create_web_interface(server_instance=None):
         if request.method == 'GET':
             # Return current demo notifications
             try:
+                # Check if file exists and has content
+                if not os.path.exists('demo_notifications.json'):
+                    return jsonify({'success': True, 'notifications': []})
+                
+                # Check file size
+                if os.path.getsize('demo_notifications.json') == 0:
+                    return jsonify({'success': True, 'notifications': []})
+                
                 with open('demo_notifications.json', 'r', encoding='utf-8') as f:
-                    notifications = json.load(f)
+                    content = f.read().strip()
+                    if not content:
+                        return jsonify({'success': True, 'notifications': []})
+                    notifications = json.loads(content)
                 return jsonify({'success': True, 'notifications': notifications})
-            except FileNotFoundError:
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                logger.error(f"Error reading demo notifications: {e}")
+                # Try to restore from backup
+                try:
+                    if os.path.exists('demo_notifications_backup.json'):
+                        logger.info("Attempting to restore from backup file")
+                        with open('demo_notifications_backup.json', 'r', encoding='utf-8') as f:
+                            notifications = json.load(f)
+                        # Restore the main file
+                        with open('demo_notifications.json', 'w', encoding='utf-8') as f:
+                            json.dump(notifications, f, indent=2, ensure_ascii=False)
+                        logger.info("Successfully restored demo notifications from backup")
+                        return jsonify({'success': True, 'notifications': notifications})
+                except Exception as restore_error:
+                    logger.error(f"Failed to restore from backup: {restore_error}")
+                
+                # Return empty array if file is corrupted and backup fails
                 return jsonify({'success': True, 'notifications': []})
+            except Exception as e:
+                logger.error(f"Unexpected error reading demo notifications: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
         
         elif request.method == 'POST':
             # Save demo notifications
@@ -47,11 +77,31 @@ def create_web_interface(server_instance=None):
                 data = request.get_json()
                 notifications = data.get('notifications', [])
                 
-                with open('demo_notifications.json', 'w', encoding='utf-8') as f:
+                # Validate notifications data
+                if not isinstance(notifications, list):
+                    return jsonify({'success': False, 'error': 'Notifications must be a list'}), 400
+                
+                # Create backup before saving
+                if os.path.exists('demo_notifications.json'):
+                    try:
+                        import shutil
+                        shutil.copy2('demo_notifications.json', 'demo_notifications_backup.json')
+                    except Exception as backup_error:
+                        logger.warning(f"Failed to create backup: {backup_error}")
+                
+                # Write to a temporary file first, then rename to prevent corruption
+                temp_file = 'demo_notifications_temp.json'
+                with open(temp_file, 'w', encoding='utf-8') as f:
                     json.dump(notifications, f, indent=2, ensure_ascii=False)
+                
+                # Atomic rename to prevent corruption
+                if os.path.exists('demo_notifications.json'):
+                    os.remove('demo_notifications.json')
+                os.rename(temp_file, 'demo_notifications.json')
                 
                 return jsonify({'success': True, 'message': 'Notifications saved'})
             except Exception as e:
+                logger.error(f"Error saving demo notifications: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/status')
@@ -173,6 +223,100 @@ def create_web_interface(server_instance=None):
             return jsonify(result)
         return jsonify({'error': 'Server not running'})
     
+    @app.route('/notifications/send-webhook', methods=['POST'])
+    def send_webhook_notifications():
+        """Send notifications to webhook API"""
+        if server_instance:
+            try:
+                # Get latest notifications
+                notification_data = server_instance.notification_manager.get_notification_data()
+                notifications = []
+                
+                # Collect all notifications from different exam types
+                for exam_type in ['jee', 'gate', 'jee_adv', 'upsc']:
+                    if exam_type in notification_data and notification_data[exam_type]:
+                        notifications.extend(notification_data[exam_type])
+                
+                # Send to webhook
+                webhook_result = server_instance.notification_manager.send_webhook_notifications(notifications)
+                
+                return jsonify({
+                    'success': webhook_result['success'],
+                    'message': webhook_result['message'],
+                    'webhook_results': webhook_result.get('webhook_results', {}),
+                    'notifications_sent': len(notifications)
+                })
+                
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/webhook/test', methods=['POST'])
+    def test_webhook():
+        """Test webhook connectivity"""
+        if server_instance:
+            try:
+                webhook_result = server_instance.notification_manager.webhook_service.test_webhook()
+                return jsonify({
+                    'success': webhook_result['success'],
+                    'message': 'Webhook test completed',
+                    'webhook_response': webhook_result.get('webhook_response', {}),
+                    'error': webhook_result.get('error')
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/backups/cleanup', methods=['POST'])
+    def cleanup_backups():
+        """Clean up old backup files"""
+        if server_instance:
+            try:
+                # Get the notification manager
+                notification_manager = server_instance.notification_manager
+                
+                # Clean up old backups (keep only last 5)
+                notification_manager.cleanup_old_backups(keep_count=5)
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Backup cleanup completed'
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/backups/cleanup-all', methods=['POST'])
+    def cleanup_all_backups():
+        """Remove all backup files (use with caution)"""
+        if server_instance:
+            try:
+                # Get the notification manager
+                notification_manager = server_instance.notification_manager
+                
+                # Remove all backups
+                notification_manager.cleanup_all_backups()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'All backup files removed'
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'})
+    
     @app.route('/websites', methods=['GET'])
     def get_websites():
         if server_instance:
@@ -212,6 +356,41 @@ def create_web_interface(server_instance=None):
                     'success': True,
                     'notifications': notification_data,
                     'timestamp': datetime.now().isoformat()
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/notifications/queue/status')
+    def get_queue_status():
+        """Get notification queue status"""
+        if server_instance:
+            try:
+                queue_status = server_instance.notification_manager.get_queue_status()
+                return jsonify({
+                    'success': True,
+                    'queue_status': queue_status,
+                    'timestamp': datetime.now().isoformat()
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/notifications/queue/clear', methods=['POST'])
+    def clear_notification_queue():
+        """Clear the notification queue"""
+        if server_instance:
+            try:
+                server_instance.notification_manager.clear_queue()
+                return jsonify({
+                    'success': True,
+                    'message': 'Notification queue cleared successfully'
                 })
             except Exception as e:
                 return jsonify({

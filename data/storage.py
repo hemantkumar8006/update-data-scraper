@@ -4,7 +4,7 @@ import os
 import shutil
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from config.settings import DATABASE_PATH, JSON_BACKUP_PATH
 
 

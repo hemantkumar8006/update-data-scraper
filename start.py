@@ -1,11 +1,5 @@
-#!/usr/bin/env python3
-"""
-Simple startup script for the Exam Scraping System
-"""
-
 import os
 import sys
-from pathlib import Path
 
 def check_requirements():
     """Check if all requirements are met"""

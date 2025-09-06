@@ -2,7 +2,6 @@ import schedule
 import time
 import threading
 import logging
-from datetime import datetime
 from config.settings import SCRAPE_INTERVAL
 
 
