@@ -57,17 +57,10 @@ cp env.example .env
 Edit `.env` file with your API keys:
 
 ```env
-# API Keys (at least one required)
-OPENAI_API_KEY=your_openai_api_key_here
-CLAUDE_API_KEY=your_claude_api_key_here
+# API Keys
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Email Notifications (Optional)
-NOTIFICATION_EMAIL=your_email@example.com
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
+# Email Notifications (Disabled - focusing on data scraping only)
 
 # Environment
 ENVIRONMENT=development
@@ -207,61 +200,6 @@ The system includes comprehensive logging and monitoring:
 - Error rate monitoring
 - Database health checks
 
-## 🐳 Docker Deployment
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-
-EXPOSE 5000
-
-CMD ["python", "main.py", "--mode", "server", "--port", "5000"]
-```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-
-services:
-  exam-scraper:
-    build: .
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./config:/app/config
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-    restart: unless-stopped
-```
-
-## 🧪 Testing
-
-Run the test suite:
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=.
-
-# Run specific test file
-pytest tests/test_scrapers.py
-```
-
 ## 📊 Monitoring
 
 ### System Health
@@ -336,13 +274,11 @@ The system automatically handles:
 
 ## 📈 Roadmap
 
-- [ ] Email notifications
-- [ ] Webhook integrations
+- [x] Data scraping and storage
 - [ ] Advanced analytics dashboard
 - [ ] Mobile app integration
 - [ ] Machine learning for content classification
 - [ ] Multi-language support
-- [ ] Cloud deployment templates
 
 ---
 

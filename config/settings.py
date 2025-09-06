@@ -4,8 +4,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API Keys
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # Scraping Configuration
@@ -34,10 +32,5 @@ AI_RATE_LIMIT_DELAY = 1  # seconds between AI requests
 MAX_CONCURRENT_REQUESTS = 5
 CACHE_TTL = 300  # 5 minutes
 
-# Notification
-ENABLE_NOTIFICATIONS = True
-NOTIFICATION_EMAIL = os.getenv('NOTIFICATION_EMAIL')
-SMTP_SERVER = os.getenv('SMTP_SERVER')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
-SMTP_USERNAME = os.getenv('SMTP_USERNAME')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
+# Notification (Disabled - focusing on data scraping only)
+ENABLE_NOTIFICATIONS = False

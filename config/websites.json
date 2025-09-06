@@ -10,7 +10,16 @@
         "date": ".date, .publish-date, .timestamp",
         "link": "a"
       },
-      "keywords": ["jee", "main", "exam", "admit card", "result", "application", "registration", "notification"],
+      "keywords": [
+        "jee",
+        "main",
+        "exam",
+        "admit card",
+        "result",
+        "application",
+        "registration",
+        "notification"
+      ],
       "enabled": true,
       "priority": "high"
     },
@@ -24,23 +33,17 @@
         "date": ".date, .publish-date",
         "link": "a"
       },
-      "keywords": ["jee", "advanced", "exam", "registration", "result", "admit card", "notification"],
+      "keywords": [
+        "jee",
+        "advanced",
+        "exam",
+        "registration",
+        "result",
+        "admit card",
+        "notification"
+      ],
       "enabled": true,
       "priority": "high"
-    },
-    {
-      "name": "CAT IIM",
-      "url": "https://iimcat.ac.in/",
-      "scraper_class": "CATScraper",
-      "selectors": {
-        "news_container": ".news, .updates, .announcements",
-        "title": "h3, .title, .announcement-title",
-        "date": ".date, .publish-date",
-        "link": "a"
-      },
-      "keywords": ["cat", "mba", "exam", "registration", "admit card", "result", "notification"],
-      "enabled": true,
-      "priority": "medium"
     },
     {
       "name": "GATE 2026",
@@ -52,7 +55,15 @@
         "date": ".date, .publish-date",
         "link": "a"
       },
-      "keywords": ["gate", "exam", "application", "result", "admit card", "registration", "notification"],
+      "keywords": [
+        "gate",
+        "exam",
+        "application",
+        "result",
+        "admit card",
+        "registration",
+        "notification"
+      ],
       "enabled": true,
       "priority": "medium"
     },
@@ -66,7 +77,15 @@
         "date": ".date, .publish-date",
         "link": "a"
       },
-      "keywords": ["upsc", "civil services", "exam", "notification", "result", "admit card", "application"],
+      "keywords": [
+        "upsc",
+        "civil services",
+        "exam",
+        "notification",
+        "result",
+        "admit card",
+        "application"
+      ],
       "enabled": true,
       "priority": "high"
     }

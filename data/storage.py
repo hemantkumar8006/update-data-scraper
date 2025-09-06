@@ -21,24 +21,21 @@ class DataStorage:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Create updates table
+        # Check if we need to migrate from old schema
+        self._migrate_database_if_needed(cursor)
+        
+        # Create updates table - simplified for raw scraped data
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS updates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 content_summary TEXT,
-                ai_summary TEXT,
-                category TEXT,
-                importance TEXT,
-                urgency TEXT,
-                action_required TEXT,
-                key_dates TEXT,
                 source TEXT NOT NULL,
+                exam_type TEXT NOT NULL,
                 url TEXT,
                 date TEXT,
                 scraped_at TEXT NOT NULL,
                 content_hash TEXT UNIQUE,
-                processed_by TEXT,
                 priority TEXT,
                 is_new BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -60,11 +57,7 @@ class DataStorage:
         ''')
         
         cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_importance ON updates(importance)
-        ''')
-        
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_category ON updates(category)
+            CREATE INDEX IF NOT EXISTS idx_exam_type ON updates(exam_type)
         ''')
         
         # Create scraping_log table for monitoring
@@ -84,6 +77,63 @@ class DataStorage:
         conn.close()
         self.logger.info("Database initialized successfully")
 
+    def _migrate_database_if_needed(self, cursor):
+        """Migrate database from old schema to new schema if needed"""
+        try:
+            # Check if old columns exist
+            cursor.execute("PRAGMA table_info(updates)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            # If old AI-related columns exist, we need to migrate
+            if 'ai_summary' in columns or 'importance' in columns:
+                self.logger.info("Migrating database from old schema to new schema...")
+                
+                # Create new table with updated schema
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS updates_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT NOT NULL,
+                        content_summary TEXT,
+                        source TEXT NOT NULL,
+                        exam_type TEXT NOT NULL,
+                        url TEXT,
+                        date TEXT,
+                        scraped_at TEXT NOT NULL,
+                        content_hash TEXT UNIQUE,
+                        priority TEXT,
+                        is_new BOOLEAN DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Copy data from old table to new table
+                cursor.execute('''
+                    INSERT INTO updates_new 
+                    (id, title, content_summary, source, exam_type, url, date, scraped_at, 
+                     content_hash, priority, is_new, created_at, updated_at)
+                    SELECT 
+                        id, title, content_summary, source, 
+                        CASE 
+                            WHEN LOWER(source) LIKE '%jee%' THEN 'JEE'
+                            WHEN LOWER(source) LIKE '%gate%' THEN 'GATE'
+                            WHEN LOWER(source) LIKE '%upsc%' THEN 'UPSC'
+                            ELSE 'OTHER'
+                        END as exam_type,
+                        url, date, scraped_at, content_hash, priority, is_new, created_at, updated_at
+                    FROM updates
+                ''')
+                
+                # Drop old table and rename new table
+                cursor.execute('DROP TABLE updates')
+                cursor.execute('ALTER TABLE updates_new RENAME TO updates')
+                
+                self.logger.info("Database migration completed successfully")
+                
+        except Exception as e:
+            self.logger.error(f"Database migration failed: {e}")
+            # If migration fails, we'll continue with the new schema
+
     def save_updates(self, updates):
         """Save updates to database with duplicate detection"""
         conn = sqlite3.connect(self.db_path)
@@ -100,25 +150,18 @@ class DataStorage:
                 
                 cursor.execute('''
                     INSERT INTO updates 
-                    (title, content_summary, ai_summary, category, importance, urgency,
-                     action_required, key_dates, source, url, date, scraped_at, 
-                     content_hash, processed_by, priority)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (title, content_summary, source, exam_type, url, date, scraped_at, 
+                     content_hash, priority)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     update['title'],
                     update.get('content_summary', ''),
-                    update.get('ai_summary', ''),
-                    update.get('category', ''),
-                    update.get('importance', ''),
-                    update.get('urgency', ''),
-                    update.get('action_required', ''),
-                    update.get('key_dates', ''),
                     update['source'],
+                    update.get('exam_type', self._determine_exam_type(update['source'])),
                     update.get('url', ''),
                     update.get('date', ''),
                     update['scraped_at'],
                     update['content_hash'],
-                    update.get('processed_by', ''),
                     update.get('priority', 'medium')
                 ))
                 
@@ -136,6 +179,18 @@ class DataStorage:
             self.save_json_backup(new_updates)
             
         return new_updates
+
+    def _determine_exam_type(self, source):
+        """Determine exam type based on source name"""
+        source_lower = source.lower()
+        if 'jee' in source_lower:
+            return 'JEE'
+        elif 'gate' in source_lower:
+            return 'GATE'
+        elif 'upsc' in source_lower:
+            return 'UPSC'
+        else:
+            return 'OTHER'
 
     def save_json_backup(self, updates):
         """Save updates as JSON backup"""
@@ -188,23 +243,40 @@ class DataStorage:
         conn.close()
         return updates
 
-    def get_updates_by_importance(self, importance, limit=50):
-        """Get updates by importance level"""
+    def get_updates_by_exam_type(self, exam_type, limit=50):
+        """Get updates by exam type"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         cursor.execute('''
             SELECT * FROM updates 
-            WHERE importance = ?
+            WHERE exam_type = ?
             ORDER BY scraped_at DESC
             LIMIT ?
-        ''', (importance, limit))
+        ''', (exam_type, limit))
         
         columns = [desc[0] for desc in cursor.description]
         updates = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
         conn.close()
         return updates
+
+    def get_all_exam_types(self):
+        """Get all available exam types"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT DISTINCT exam_type, COUNT(*) as count
+            FROM updates 
+            GROUP BY exam_type
+            ORDER BY count DESC
+        ''')
+        
+        exam_types = cursor.fetchall()
+        conn.close()
+        
+        return [{'exam_type': row[0], 'count': row[1]} for row in exam_types]
 
     def check_existing_hash(self, content_hash):
         """Check if content hash exists in database"""
@@ -346,13 +418,13 @@ class DataStorage:
         ''')
         updates_by_source = dict(cursor.fetchall())
         
-        # Get updates by importance
+        # Get updates by exam type
         cursor.execute('''
-            SELECT importance, COUNT(*) 
+            SELECT exam_type, COUNT(*) 
             FROM updates 
-            GROUP BY importance
+            GROUP BY exam_type
         ''')
-        updates_by_importance = dict(cursor.fetchall())
+        updates_by_exam_type = dict(cursor.fetchall())
         
         # Get recent activity
         cursor.execute('''
@@ -367,7 +439,7 @@ class DataStorage:
         return {
             'total_updates': total_updates,
             'updates_by_source': updates_by_source,
-            'updates_by_importance': updates_by_importance,
+            'updates_by_exam_type': updates_by_exam_type,
             'recent_updates_24h': recent_updates,
             'database_size_mb': round(os.path.getsize(self.db_path) / (1024 * 1024), 2)
         }

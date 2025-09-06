@@ -9,10 +9,9 @@ from mcp_server.server import MCPExamScrapingServer
 from config.settings import WEB_HOST, WEB_PORT
 
 
-def create_web_interface():
+def create_web_interface(server_instance=None):
     """Create a simple web interface for monitoring"""
     app = Flask(__name__)
-    server_instance = None
     
     @app.route('/')
     def index():
@@ -51,12 +50,46 @@ def create_web_interface():
                     fetch('/recent_updates/24')
                         .then(response => response.json())
                         .then(data => {
-                            let html = '<h2>Recent Updates (Last 24 Hours)</h2><table><tr><th>Title</th><th>Source</th><th>Importance</th><th>Date</th></tr>';
+                            let html = '<h2>Recent Updates (Last 24 Hours)</h2><table><tr><th>Title</th><th>Source</th><th>Exam Type</th><th>Date</th></tr>';
                             data.slice(0, 10).forEach(update => {
-                                html += '<tr><td>' + update.title + '</td><td>' + update.source + '</td><td>' + (update.importance || 'N/A') + '</td><td>' + update.scraped_at + '</td></tr>';
+                                html += '<tr><td>' + update.title + '</td><td>' + update.source + '</td><td>' + (update.exam_type || 'N/A') + '</td><td>' + update.scraped_at + '</td></tr>';
                             });
                             html += '</table>';
+                            html += '<div style="margin-top: 20px;">';
+                            html += '<button onclick="exportData()" style="background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Export All Data</button>';
+                            html += '<button onclick="exportLatestData()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Export Latest Data</button>';
+                            html += '</div>';
                             document.getElementById('recent-updates').innerHTML = html;
+                        });
+                }
+                
+                function exportData() {
+                    fetch('/export/data')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('Data exported successfully!\\nFile: ' + data.filepath);
+                            } else {
+                                alert('Export failed: ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            alert('Export failed: ' + error);
+                        });
+                }
+                
+                function exportLatestData() {
+                    fetch('/export/latest')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('Latest data exported successfully!\\nFile: ' + data.filepath);
+                            } else {
+                                alert('Export failed: ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            alert('Export failed: ' + error);
                         });
                 }
                 
@@ -89,17 +122,102 @@ def create_web_interface():
             return jsonify(updates)
         return jsonify([])
     
-    @app.route('/updates/importance/<importance>')
-    def updates_by_importance(importance):
+    @app.route('/updates/exam_type/<exam_type>')
+    def updates_by_exam_type(exam_type):
         if server_instance:
-            updates = server_instance.get_updates_by_importance(importance)
+            updates = server_instance.get_updates_by_exam_type(exam_type)
             return jsonify(updates)
         return jsonify([])
+    
+    @app.route('/exam_types')
+    def get_exam_types():
+        if server_instance:
+            exam_types = server_instance.get_all_exam_types()
+            return jsonify(exam_types)
+        return jsonify([])
+    
+    @app.route('/export/data')
+    def export_data():
+        if server_instance:
+            try:
+                from data.export_data import DataExporter
+                exporter = DataExporter(server_instance.storage)
+                filepath = exporter.export_to_json()
+                return jsonify({
+                    'success': True,
+                    'filepath': filepath,
+                    'message': 'Data exported successfully'
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'}), 500
+    
+    @app.route('/export/latest')
+    def export_latest_data():
+        if server_instance:
+            try:
+                from data.export_data import DataExporter
+                exporter = DataExporter(server_instance.storage)
+                filepath = exporter.export_latest_data()
+                return jsonify({
+                    'success': True,
+                    'filepath': filepath,
+                    'message': 'Latest data exported successfully'
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'}), 500
+    
+    @app.route('/export/<exam_type>')
+    def export_exam_type_data(exam_type):
+        if server_instance:
+            try:
+                from data.export_data import DataExporter
+                exporter = DataExporter(server_instance.storage)
+                filepath = exporter.export_by_exam_type(exam_type)
+                return jsonify({
+                    'success': True,
+                    'filepath': filepath,
+                    'message': f'{exam_type.upper()} data exported successfully'
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'}), 500
     
     @app.route('/scrape', methods=['POST'])
     def trigger_scrape():
         if server_instance:
             result = server_instance.run_single_scrape()
+            return jsonify(result)
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/notifications/init', methods=['POST'])
+    def init_notifications():
+        if server_instance:
+            result = server_instance.initial_setup()
+            return jsonify(result)
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/notifications/status')
+    def notification_status():
+        if server_instance:
+            result = server_instance.get_notification_status()
+            return jsonify(result)
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/notifications/clear', methods=['POST'])
+    def clear_notifications():
+        if server_instance:
+            result = server_instance.clear_notifications()
             return jsonify(result)
         return jsonify({'error': 'Server not running'})
     
@@ -170,11 +288,7 @@ def main():
         logger.info("Starting MCP Exam Scraping Server...")
         server = MCPExamScrapingServer()
         
-        # Set global server instance for web interface
-        global server_instance
-        server_instance = server
-        
-        app = create_web_interface()
+        app = create_web_interface(server)
         
         # Start server in background thread
         server_thread = threading.Thread(target=server.start_scheduler)

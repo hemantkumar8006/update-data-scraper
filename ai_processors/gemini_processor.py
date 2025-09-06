@@ -11,7 +11,7 @@ class GeminiProcessor:
             raise ValueError("Gemini API key not found. Please set GEMINI_API_KEY in your environment.")
         
         genai.configure(api_key=GEMINI_API_KEY)
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def enhance_content(self, updates):

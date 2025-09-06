@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""
+Smart MCP Exam Scraping Server with file-based incremental updates
+"""
+
 import json
 import logging
 import time
@@ -6,23 +11,23 @@ from scrapers import (
     NTAScraper, JEEAdvancedScraper, 
     GATEScraper, UPSCScraper
 )
-# AI processing removed - storing raw scraped data directly
 from data.storage import DataStorage
-from data.notification_manager import NotificationManager
-from .scheduler import Scheduler
+from .smart_scheduler import SmartScheduler
 from config.settings import SCRAPE_INTERVAL
 
-class MCPExamScrapingServer:
-    def __init__(self):
+
+class SmartMCPExamScrapingServer:
+    """Smart MCP Exam Scraping Server with incremental file updates"""
+    
+    def __init__(self, export_file="data/exam_data.json"):
         self.storage = DataStorage()
-        self.notification_manager = NotificationManager(self.storage)
-        # AI processor removed - storing raw data directly
+        self.export_file = export_file
         self.setup_logging()
         self.load_website_configs()
         self.scrapers = {}
         self.init_scrapers()
-        self.scheduler = Scheduler(self.scrape_all_websites)
-        self.logger.info("MCP Exam Scraping Server initialized")
+        self.scheduler = SmartScheduler(self.scrape_all_websites, export_file)
+        self.logger.info("Smart MCP Exam Scraping Server initialized")
 
     def setup_logging(self):
         """Setup logging configuration"""
@@ -142,37 +147,27 @@ class MCPExamScrapingServer:
                     'error': str(e)
                 }
         
-        # Process new updates with notification system
-        notification_result = None
+        # Log new updates found
         if all_new_updates:
-            self.logger.info(f"Processing {len(all_new_updates)} new updates with notification system...")
-            try:
-                notification_result = self.notification_manager.process_next_scrape_cycle(all_new_updates)
-                self.logger.info(f"Notification processing completed: {notification_result['stats']['new_notifications']} new notifications")
-            except Exception as e:
-                self.logger.error(f"Error processing notifications: {e}")
+            self.logger.info(f"Total new updates found: {len(all_new_updates)}")
         else:
             self.logger.info("No new updates found in this cycle")
-            # Clear notifications since no new data
-            self.notification_manager.clear_notifications()
         
         return {
             'new_updates_count': len(all_new_updates),
             'scraping_stats': scraping_stats,
-            'notification_result': notification_result,
             'timestamp': datetime.now().isoformat()
         }
 
-
     def start_scheduler(self):
-        """Start the scheduling system"""
+        """Start the smart scheduling system"""
         self.scheduler.start()
-        self.logger.info("Scheduler started successfully")
+        self.logger.info("Smart scheduler started successfully")
 
     def stop_scheduler(self):
         """Stop the scheduling system"""
         self.scheduler.stop()
-        self.logger.info("Scheduler stopped")
+        self.logger.info("Smart scheduler stopped")
 
     def get_status(self):
         """Get server status"""
@@ -180,6 +175,7 @@ class MCPExamScrapingServer:
             recent_updates = self.storage.get_recent_updates(24)
             scraping_stats = self.storage.get_scraping_stats(24)
             db_stats = self.storage.get_database_stats()
+            export_info = self.scheduler.get_export_file_info()
             
             return {
                 'status': 'running',
@@ -189,6 +185,7 @@ class MCPExamScrapingServer:
                 'recent_updates_24h': len(recent_updates),
                 'scraping_stats_24h': scraping_stats,
                 'database_stats': db_stats,
+                'export_file_info': export_info,
                 'next_scheduled_run': self.scheduler.get_next_run_time(),
                 'schedule_info': self.scheduler.get_schedule_info()
             }
@@ -219,55 +216,18 @@ class MCPExamScrapingServer:
     def run_single_scrape(self):
         """Run scraping once without scheduling"""
         return self.scrape_all_websites()
-    
-    def initial_setup(self):
-        """Step 1: Initial scrape and setup of notification system"""
-        self.logger.info("Running initial setup...")
-        try:
-            result = self.notification_manager.initial_scrape_and_setup()
-            self.logger.info("Initial setup completed successfully")
-            return {
-                'success': True,
-                'result': result,
-                'message': 'Initial setup completed'
-            }
-        except Exception as e:
-            self.logger.error(f"Initial setup failed: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'message': 'Initial setup failed'
-            }
-    
-    def get_notification_status(self):
-        """Get current notification system status"""
-        try:
-            status = self.notification_manager.get_status()
-            return {
-                'success': True,
-                'status': status
-            }
-        except Exception as e:
-            self.logger.error(f"Error getting notification status: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-    
-    def clear_notifications(self):
-        """Clear the updated_notifications.json file"""
-        try:
-            self.notification_manager.clear_notifications()
-            return {
-                'success': True,
-                'message': 'Notifications cleared successfully'
-            }
-        except Exception as e:
-            self.logger.error(f"Error clearing notifications: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+
+    def force_fresh_export(self):
+        """Force a fresh export"""
+        return self.scheduler.force_fresh_scrape()
+
+    def force_incremental_export(self):
+        """Force an incremental export"""
+        return self.scheduler.force_incremental_update()
+
+    def get_export_file_info(self):
+        """Get export file information"""
+        return self.scheduler.get_export_file_info()
 
     def add_website(self, website_config):
         """Add new website to configuration"""
