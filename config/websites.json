@@ -1,0 +1,74 @@
+{
+  "websites": [
+    {
+      "name": "JEE Main NTA",
+      "url": "https://jeemain.nta.nic.in/",
+      "scraper_class": "NTAScraper",
+      "selectors": {
+        "news_container": ".latest-news, .updates, .notifications, .notification-list",
+        "title": "h3, h4, .title, a",
+        "date": ".date, .publish-date, .timestamp",
+        "link": "a"
+      },
+      "keywords": ["jee", "main", "exam", "admit card", "result", "application", "registration", "notification"],
+      "enabled": true,
+      "priority": "high"
+    },
+    {
+      "name": "JEE Advanced",
+      "url": "https://jeeadv.ac.in/",
+      "scraper_class": "JEEAdvancedScraper",
+      "selectors": {
+        "news_container": ".news-section, .announcements, .latest-news",
+        "title": "h3, .announcement-title, .title",
+        "date": ".date, .publish-date",
+        "link": "a"
+      },
+      "keywords": ["jee", "advanced", "exam", "registration", "result", "admit card", "notification"],
+      "enabled": true,
+      "priority": "high"
+    },
+    {
+      "name": "CAT IIM",
+      "url": "https://iimcat.ac.in/",
+      "scraper_class": "CATScraper",
+      "selectors": {
+        "news_container": ".news, .updates, .announcements",
+        "title": "h3, .title, .announcement-title",
+        "date": ".date, .publish-date",
+        "link": "a"
+      },
+      "keywords": ["cat", "mba", "exam", "registration", "admit card", "result", "notification"],
+      "enabled": true,
+      "priority": "medium"
+    },
+    {
+      "name": "GATE 2026",
+      "url": "https://gate2026.iitg.ac.in/",
+      "scraper_class": "GATEScraper",
+      "selectors": {
+        "news_container": ".announcements, .news, .updates",
+        "title": "h3, .announcement, .title",
+        "date": ".date, .publish-date",
+        "link": "a"
+      },
+      "keywords": ["gate", "exam", "application", "result", "admit card", "registration", "notification"],
+      "enabled": true,
+      "priority": "medium"
+    },
+    {
+      "name": "UPSC",
+      "url": "https://upsc.gov.in/",
+      "scraper_class": "UPSCScraper",
+      "selectors": {
+        "news_container": ".whats-new, .latest-updates, .announcements",
+        "title": "h3, .title, .announcement-title",
+        "date": ".date, .publish-date",
+        "link": "a"
+      },
+      "keywords": ["upsc", "civil services", "exam", "notification", "result", "admit card", "application"],
+      "enabled": true,
+      "priority": "high"
+    }
+  ]
+}
