@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from scrapers import (
     NTAScraper, JEEAdvancedScraper, 
-    GATEScraper, UPSCScraper
+    GATEScraper, UPSCScraper, DemoScraper
 )
 # AI processing removed - storing raw scraped data directly
 from data.storage import DataStorage
@@ -52,7 +52,8 @@ class MCPExamScrapingServer:
             'NTAScraper': NTAScraper,
             'JEEAdvancedScraper': JEEAdvancedScraper,
             'GATEScraper': GATEScraper,
-            'UPSCScraper': UPSCScraper
+            'UPSCScraper': UPSCScraper,
+            'DemoScraper': DemoScraper
         }
         
         for website in self.website_configs['websites']:

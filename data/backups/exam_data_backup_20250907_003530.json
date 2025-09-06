@@ -1,6 +1,17 @@
 {
   "jee": [
     {
+      "id": "demo_1757185392_44a93cae",
+      "title": "JEE Main 2024 Registration Extended",
+      "content_summary": "The registration deadline for JEE Main 2024 has been extended to December 15, 2023. Students can now register through the official NTA website.",
+      "source": "NTA",
+      "url": "https://jeemain.nta.ac.in",
+      "date": "2024-01-15",
+      "scraped_at": "2025-09-07T00:33:12.029914",
+      "priority": "high",
+      "content_hash": "49556785a87a99ee0b2a25e399311f10"
+    },
+    {
       "id": 23,
       "title": "Correction window of online application of JEE (Main)-2025 will be live on 26th and 27th November 2024 (till 11:30 p.m.)",
       "content_summary": "Correction window of online application of JEE (Main)-2025 will be live on 26th and 27th November 2024 (till 11:30 p.m.)",
@@ -255,6 +266,17 @@
     }
   ],
   "gate": [
+    {
+      "id": "demo_1757185392_e8ee8932",
+      "title": "GATE 2024 Admit Card Released",
+      "content_summary": "GATE 2024 admit cards are now available for download. Candidates can access their admit cards from the official GATE website using their login credentials.",
+      "source": "IIT",
+      "url": "https://gate.iit.ac.in",
+      "date": "2024-01-10",
+      "scraped_at": "2025-09-07T00:33:12.029895",
+      "priority": "high",
+      "content_hash": "307de51cba846d801c76a00002e0a796"
+    },
     {
       "id": 53,
       "title": "Two-Paper Combinations",
@@ -865,7 +887,7 @@
       "content_hash": "d17f8b560b84166a6906a7774fee1d77"
     }
   ],
-  "total_notification": 78,
-  "last_updated": "2025-09-06T21:05:21.877841",
-  "last_scrape": "2025-09-06T21:05:21.877870"
+  "total_notification": 80,
+  "last_updated": "2025-09-07T00:33:12.049561",
+  "last_scrape": "2025-09-07T00:33:12.049562"
 }

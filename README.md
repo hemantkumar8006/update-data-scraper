@@ -96,6 +96,63 @@ Access the web dashboard at `http://localhost:5000` to:
 - Trigger manual scraping
 - Manage website configurations
 - View scraping statistics
+- **Demo Notification System**: Add and manage notifications in real-time
+
+## 🎯 Demo System Workflow
+
+The demo system provides a complete end-to-end example of how the notification system works:
+
+> 📖 **For detailed step-by-step instructions, see [DEMO.md](DEMO.md)**
+
+### Quick Demo Start
+
+### Step-by-Step Demo Process
+
+1. **Start the Demo System**
+
+   ```bash
+   # Option 1: Use the demo startup script (recommended)
+   python start_demo.py
+
+   # Option 2: Start manually
+   python main.py --mode server
+   ```
+
+2. **Access the Dashboard**
+
+   - Open http://localhost:5000
+   - Scroll down to the "Demo Notification System" section
+
+3. **Initialize the System**
+
+   - Click "Initialize Notifications" button
+   - This sets up the notification system and creates data files
+
+4. **Add Demo Notifications**
+
+   - Use the embedded demo interface to add notifications
+   - Fill in title, content, exam type, source, priority, URL, and date
+   - Click "Add Notification" - this saves to `demo_notifications.json`
+
+5. **Run the Scraper**
+
+   - Click "Run Scrape" button in the dashboard
+   - The `DemoScraper` reads from `demo_notifications.json`
+   - New notifications are saved to the SQLite database
+
+6. **View Results**
+   - New notifications appear in the dashboard
+   - Real-time statistics update
+   - Toast notifications show new items
+
+### How the Demo System Works
+
+1. **User Input**: Users add notifications via the demo HTML interface
+2. **Data Storage**: Notifications are saved to `demo_notifications.json`
+3. **Scraper Processing**: `DemoScraper` reads the JSON file and extracts notifications
+4. **Database Integration**: New notifications are saved to the SQLite database
+5. **Real-time Display**: Dashboard shows all notifications from the database
+6. **Live Updates**: Changes are reflected immediately in the dashboard
 
 ### API Endpoints
 
@@ -110,7 +167,7 @@ Access the web dashboard at `http://localhost:5000` to:
 ## 📁 Project Structure
 
 ```
-exam_scraper/
+Kapp-Data-Scraper/
 ├── config/
 │   ├── settings.py          # Configuration settings
 │   └── websites.json        # Website configurations
@@ -118,28 +175,31 @@ exam_scraper/
 │   ├── base_scraper.py      # Base scraper class
 │   ├── nta_scraper.py       # NTA JEE Main scraper
 │   ├── jee_advanced_scraper.py
-│   ├── cat_scraper.py       # CAT IIM scraper
 │   ├── gate_scraper.py      # GATE scraper
-│   └── upsc_scraper.py      # UPSC scraper
-├── ai_processors/
-│   ├── base_processor.py    # AI processor with fallback
-│   ├── openai_processor.py  # OpenAI integration
-│   ├── claude_processor.py  # Claude integration
-│   └── gemini_processor.py  # Gemini integration
+│   ├── upsc_scraper.py      # UPSC scraper
+│   └── demo_scraper.py      # Demo scraper for testing
 ├── data/
-│   └── storage.py           # Database and storage management
+│   ├── storage.py           # Database management
+│   ├── notification_manager.py  # Notification system
+│   ├── exam_data.json       # Main data file
+│   └── exam_updates.db      # SQLite database
 ├── mcp_server/
 │   ├── server.py            # Main server logic
 │   └── scheduler.py         # Scheduling system
+├── templates/
+│   └── dashboard.html       # Web dashboard
 ├── utils/
 │   ├── helpers.py           # Utility functions
 │   └── logger.py            # Logging utilities
-├── tests/                   # Test files
-├── logs/                    # Log files
-├── data/                    # Database and backups
+├── demo_notifications.html  # Demo notification interface
+├── demo_notifications.json  # Demo data storage
+├── demo_server.py           # Demo HTTP server
 ├── main.py                  # Main application entry point
+├── start.py                 # Alternative startup script
+├── start_demo.py            # Demo system startup script
 ├── requirements.txt         # Python dependencies
-└── README.md               # This file
+├── README.md               # This file
+└── DEMO.md                 # Step-by-step demo guide
 ```
 
 ## ⚙️ Configuration

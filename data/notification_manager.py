@@ -6,10 +6,15 @@ This system manages the updated_notifications.json file and compares new data wi
 
 import json
 import os
+import sys
 import hashlib
 from datetime import datetime
 from typing import Dict, List, Any, Set
-from .storage import DataStorage
+try:
+    from .storage import DataStorage
+except ImportError:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from data.storage import DataStorage
 
 
 class NotificationManager:

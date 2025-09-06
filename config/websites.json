@@ -88,6 +88,28 @@
       ],
       "enabled": true,
       "priority": "high"
+    },
+    {
+      "name": "Demo Notifications",
+      "url": "file://demo_notifications.html",
+      "scraper_class": "DemoScraper",
+      "demo_file_path": "demo_notifications.html",
+      "selectors": {
+        "news_container": ".notification-card",
+        "title": ".notification-title",
+        "content": ".notification-content",
+        "meta": ".meta-item"
+      },
+      "keywords": [
+        "demo",
+        "notification",
+        "test",
+        "jee",
+        "gate",
+        "upsc"
+      ],
+      "enabled": true,
+      "priority": "high"
     }
   ]
 }

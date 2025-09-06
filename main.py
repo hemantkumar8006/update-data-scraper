@@ -4,103 +4,55 @@ import argparse
 import sys
 import threading
 import logging
-from flask import Flask, jsonify, request
+import json
+import time
+from datetime import datetime
+from flask import Flask, jsonify, request, render_template
 from mcp_server.server import MCPExamScrapingServer
 from config.settings import WEB_HOST, WEB_PORT
 
 
 def create_web_interface(server_instance=None):
-    """Create a simple web interface for monitoring"""
-    app = Flask(__name__)
+    """Create a modern web interface for monitoring"""
+    app = Flask(__name__, template_folder='templates')
     
     @app.route('/')
     def index():
-        return '''
-        <html>
-        <head>
-            <title>Exam Scraper Dashboard</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
-                .success { background-color: #d4edda; border: 1px solid #c3e6cb; }
-                .error { background-color: #f8d7da; border: 1px solid #f5c6cb; }
-                .info { background-color: #d1ecf1; border: 1px solid #bee5eb; }
-                table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
-            </style>
-        </head>
-        <body>
-            <h1>Exam Update Scraping System</h1>
-            <div id="status"></div>
-            <div id="recent-updates"></div>
-            <script>
-                function loadStatus() {
-                    fetch('/status')
-                        .then(response => response.json())
-                        .then(data => {
-                            document.getElementById('status').innerHTML = 
-                                '<div class="status success">System Status: ' + data.status + '</div>' +
-                                '<div class="status info">Active Scrapers: ' + data.total_scrapers + '</div>' +
-                                '<div class="status info">Recent Updates (24h): ' + data.recent_updates_24h + '</div>';
-                        });
-                }
+        return render_template('dashboard.html')
+    
+    @app.route('/demo')
+    def demo():
+        """Serve the demo notifications page"""
+        try:
+            with open('demo_notifications.html', 'r', encoding='utf-8') as f:
+                return f.read()
+        except FileNotFoundError:
+            return "Demo page not found. Please ensure demo_notifications.html exists.", 404
+    
+    @app.route('/demo/notifications', methods=['GET', 'POST'])
+    def demo_notifications():
+        """API endpoint for demo notifications"""
+        if request.method == 'GET':
+            # Return current demo notifications
+            try:
+                with open('demo_notifications.json', 'r', encoding='utf-8') as f:
+                    notifications = json.load(f)
+                return jsonify({'success': True, 'notifications': notifications})
+            except FileNotFoundError:
+                return jsonify({'success': True, 'notifications': []})
+        
+        elif request.method == 'POST':
+            # Save demo notifications
+            try:
+                data = request.get_json()
+                notifications = data.get('notifications', [])
                 
-                function loadRecentUpdates() {
-                    fetch('/recent_updates/24')
-                        .then(response => response.json())
-                        .then(data => {
-                            let html = '<h2>Recent Updates (Last 24 Hours)</h2><table><tr><th>Title</th><th>Source</th><th>Exam Type</th><th>Date</th></tr>';
-                            data.slice(0, 10).forEach(update => {
-                                html += '<tr><td>' + update.title + '</td><td>' + update.source + '</td><td>' + (update.exam_type || 'N/A') + '</td><td>' + update.scraped_at + '</td></tr>';
-                            });
-                            html += '</table>';
-                            html += '<div style="margin-top: 20px;">';
-                            html += '<button onclick="exportData()" style="background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Export All Data</button>';
-                            html += '<button onclick="exportLatestData()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Export Latest Data</button>';
-                            html += '</div>';
-                            document.getElementById('recent-updates').innerHTML = html;
-                        });
-                }
+                with open('demo_notifications.json', 'w', encoding='utf-8') as f:
+                    json.dump(notifications, f, indent=2, ensure_ascii=False)
                 
-                function exportData() {
-                    fetch('/export/data')
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                alert('Data exported successfully!\\nFile: ' + data.filepath);
-                            } else {
-                                alert('Export failed: ' + data.error);
-                            }
-                        })
-                        .catch(error => {
-                            alert('Export failed: ' + error);
-                        });
-                }
-                
-                function exportLatestData() {
-                    fetch('/export/latest')
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                alert('Latest data exported successfully!\\nFile: ' + data.filepath);
-                            } else {
-                                alert('Export failed: ' + data.error);
-                            }
-                        })
-                        .catch(error => {
-                            alert('Export failed: ' + error);
-                        });
-                }
-                
-                loadStatus();
-                loadRecentUpdates();
-                setInterval(loadStatus, 30000); // Refresh every 30 seconds
-                setInterval(loadRecentUpdates, 60000); // Refresh every minute
-            </script>
-        </body>
-        </html>
-        '''
+                return jsonify({'success': True, 'message': 'Notifications saved'})
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/status')
     def status():
@@ -248,6 +200,83 @@ def create_web_interface(server_instance=None):
             
             return jsonify({'success': result})
         return jsonify({'error': 'Server not running'})
+    
+    @app.route('/notifications/latest')
+    def get_latest_notifications():
+        """Get the latest notifications from the notification manager"""
+        if server_instance:
+            try:
+                # Get notifications from the notification manager
+                notification_data = server_instance.notification_manager.get_notification_data()
+                return jsonify({
+                    'success': True,
+                    'notifications': notification_data,
+                    'timestamp': datetime.now().isoformat()
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        return jsonify({'error': 'Server not running'})
+    
+    @app.route('/notifications/stream')
+    def stream_notifications():
+        """Stream real-time notifications using Server-Sent Events"""
+        if not server_instance:
+            return jsonify({'error': 'Server not running'}), 500
+        
+        def generate():
+            last_count = 0
+            heartbeat_interval = 30  # seconds
+            last_heartbeat = time.time()
+            
+            while True:
+                try:
+                    current_time = time.time()
+                    
+                    # Get current notification count
+                    notification_data = server_instance.notification_manager.get_notification_data()
+                    current_count = notification_data.get('total_new_notifications', 0)
+                    
+                    # If there are new notifications, send them
+                    if current_count > last_count:
+                        yield f"data: {json.dumps({
+                            'type': 'new_notifications',
+                            'count': current_count - last_count,
+                            'notifications': notification_data,
+                            'timestamp': datetime.now().isoformat()
+                        })}\n\n"
+                        last_count = current_count
+                    
+                    # Send heartbeat every 30 seconds
+                    if current_time - last_heartbeat >= heartbeat_interval:
+                        yield f"data: {json.dumps({
+                            'type': 'heartbeat',
+                            'timestamp': datetime.now().isoformat()
+                        })}\n\n"
+                        last_heartbeat = current_time
+                    
+                    time.sleep(5)  # Check every 5 seconds for responsiveness
+                    
+                except Exception as e:
+                    yield f"data: {json.dumps({
+                        'type': 'error',
+                        'error': str(e),
+                        'timestamp': datetime.now().isoformat()
+                    })}\n\n"
+                    break
+        
+        return app.response_class(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Cache-Control'
+            }
+        )
     
     return app
 
