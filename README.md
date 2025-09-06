@@ -24,7 +24,7 @@ A comprehensive, production-ready system for scraping and monitoring exam update
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/hemantkumar8006/update-data-scraper.git
 cd exam_scraper
 ```
 
