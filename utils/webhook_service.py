@@ -26,7 +26,7 @@ class WebhookService:
             # Prepare headers
             headers = {
                 "Content-Type": "application/json",
-                "X-Webhook-Secret": "notif_webhook_2025_secure_key_123"
+                "X-Webhook-Secret": self.webhook_secret
                 }
             
             # Prepare payload
@@ -121,9 +121,9 @@ class WebhookService:
         content = notification_data.get('content_summary', notification_data.get('content', ''))
         source = notification_data.get('source', 'exam_scraper')
         priority = notification_data.get('priority', 'medium')
-        notification_data.get('url', '')
+        url = notification_data.get('url', '')
         date = notification_data.get('date', '')
-        notification_data.get('scraped_at', '')
+        scraped_at = notification_data.get('scraped_at', '')
         
         # Determine exam type from source or title
         exam_type = self._determine_exam_type(notification_data)
@@ -135,9 +135,16 @@ class WebhookService:
             'gate': 'GATE',
             'upsc': 'UPSC Civil Services',
             'cat': 'CAT',
+            'neet': 'NEET',
             'demo': 'Demo Notification'
         }
         exam_name = exam_name_mapping.get(exam_type.lower(), exam_type.upper())
+        
+        # Extract time from date or use current time
+        exam_time = self._extract_time_from_date(date, scraped_at)
+        
+        # Determine location based on exam type and source
+        location = self._determine_location(exam_type, source, title, notification_data)
         
         # Create payload matching the bot's expected format
         # Only include the exact fields the bot expects
@@ -148,10 +155,11 @@ class WebhookService:
             "metadata": {
                 "examName": exam_name,
                 "examDate": date,
-                "examTime": "10:00 AM",  # Default time
-                "location": "Online",     # Default location
+                "examTime": exam_time,
+                "location": location,
                 "priority": priority,
-                "source": source
+                "source": source,
+                "url": url
             }
         }
         
@@ -189,6 +197,14 @@ class WebhookService:
         elif ('upsc' in source or 'upsc' in title):
             return 'upsc'
         
+        # Check for NEET
+        elif ('neet' in source or 'neet' in title):
+            return 'neet'
+        
+        # Check for CAT
+        elif ('cat' in source or 'cat' in title):
+            return 'cat'
+        
         # Check for JEE Main (or any JEE that's not Advanced)
         elif ('jee' in source or 'jee' in title or 'nta' in source):
             return 'jee'
@@ -200,6 +216,176 @@ class WebhookService:
         # Default to JEE if unclear
         else:
             return 'jee'
+    
+    def _extract_time_from_date(self, date: str, scraped_at: str) -> str:
+        """
+        Extract time from date string or use current time as fallback
+        
+        Args:
+            date: Date string from notification data
+            scraped_at: Scraped timestamp as fallback
+            
+        Returns:
+            Formatted time string (HH:MM AM/PM)
+        """
+        try:
+            # If date is provided, try to extract time from it
+            if date and date.strip():
+                # Try to parse the date and extract time
+                parsed_time = self._parse_time_from_date_string(date)
+                if parsed_time:
+                    return parsed_time
+            
+            # If no date or couldn't extract time, use scraped_at
+            if scraped_at and scraped_at.strip():
+                try:
+                    # Parse ISO format timestamp
+                    dt = datetime.fromisoformat(scraped_at.replace('Z', '+00:00'))
+                    return dt.strftime("%I:%M %p")
+                except:
+                    pass
+            
+            # Final fallback: current time
+            return datetime.now().strftime("%I:%M %p")
+            
+        except Exception as e:
+            self.logger.warning(f"Error extracting time from date '{date}': {e}")
+            # Fallback to current time
+            return datetime.now().strftime("%I:%M %p")
+    
+    def _parse_time_from_date_string(self, date_str: str) -> str:
+        """
+        Parse time from various date string formats
+        
+        Args:
+            date_str: Date string that might contain time
+            
+        Returns:
+            Formatted time string or None if no time found
+        """
+        import re
+        
+        # Common time patterns
+        time_patterns = [
+            r'\b(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)\b',  # 10:30 AM
+            r'\b(\d{1,2}):(\d{2})\b',  # 10:30 (assume 24-hour format)
+            r'\b(\d{1,2})\s*(AM|PM|am|pm)\b',  # 10 AM
+        ]
+        
+        for pattern in time_patterns:
+            match = re.search(pattern, date_str, re.IGNORECASE)
+            if match:
+                try:
+                    if len(match.groups()) == 3:  # HH:MM AM/PM
+                        hour = int(match.group(1))
+                        minute = int(match.group(2))
+                        period = match.group(3).upper()
+                        
+                        # Convert to 24-hour format for datetime
+                        if period == 'PM' and hour != 12:
+                            hour += 12
+                        elif period == 'AM' and hour == 12:
+                            hour = 0
+                        
+                        dt = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+                        return dt.strftime("%I:%M %p")
+                        
+                    elif len(match.groups()) == 2:  # HH:MM or HH AM/PM
+                        if ':' in match.group(0):  # HH:MM format
+                            hour = int(match.group(1))
+                            minute = int(match.group(2))
+                            
+                            # Assume 24-hour format, convert to 12-hour
+                            dt = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+                            return dt.strftime("%I:%M %p")
+                        else:  # HH AM/PM format
+                            hour = int(match.group(1))
+                            period = match.group(2).upper()
+                            
+                            # Convert to 24-hour format for datetime
+                            if period == 'PM' and hour != 12:
+                                hour += 12
+                            elif period == 'AM' and hour == 12:
+                                hour = 0
+                            
+                            dt = datetime.now().replace(hour=hour, minute=0, second=0, microsecond=0)
+                            return dt.strftime("%I:%M %p")
+                            
+                except (ValueError, TypeError):
+                    continue
+        
+        return None
+    
+    def _determine_location(self, exam_type: str, source: str, title: str, notification_data: Dict[str, Any]) -> str:
+        """
+        Determine exam location based on available data
+        
+        Args:
+            exam_type: Type of exam
+            source: Source of the notification
+            title: Title of the notification
+            notification_data: Full notification data
+            
+        Returns:
+            Location string
+        """
+        # First, check if location is explicitly provided in notification data
+        explicit_location = notification_data.get('location', '')
+        if explicit_location and explicit_location.strip():
+            return explicit_location.strip()
+        
+        # Try to extract location from title or content
+        content = notification_data.get('content_summary', notification_data.get('content', ''))
+        full_text = f"{title} {content}".lower()
+        
+        # Common location patterns
+        location_patterns = [
+            r'\bonline\b',
+            r'\bcomputer based\b',
+            r'\bcbt\b',
+            r'\bpen and paper\b',
+            r'\boffline\b',
+            r'\bcenters?\b',
+            r'\bexam centers?\b',
+            r'\bvenue\b',
+            r'\blocation\b',
+            r'\bconducted\b',
+        ]
+        
+        import re
+        for pattern in location_patterns:
+            if re.search(pattern, full_text, re.IGNORECASE):
+                # Extract the context around the location mention
+                match = re.search(pattern, full_text, re.IGNORECASE)
+                if match:
+                    # Try to get more context
+                    start = max(0, match.start() - 20)
+                    end = min(len(full_text), match.end() + 20)
+                    context = full_text[start:end]
+                    
+                    # Look for specific location indicators
+                    if 'online' in context or 'computer' in context or 'cbt' in context:
+                        return "Online"
+                    elif 'center' in context or 'venue' in context:
+                        # Try to extract city or center name
+                        city_match = re.search(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b', context)
+                        if city_match:
+                            return f"Exam Centers ({city_match.group(1)})"
+                        else:
+                            return "Exam Centers"
+        
+        # Default location based on exam type
+        default_locations = {
+            'jee': 'Online (Computer Based Test)',
+            'jee_adv': 'Online (Computer Based Test)',
+            'gate': 'Online (Computer Based Test)',
+            'upsc': 'Offline (Pen and Paper)',
+            'neet': 'Offline (Pen and Paper)',
+            'cat': 'Online (Computer Based Test)',
+            'demo': 'Online'
+        }
+        
+        return default_locations.get(exam_type.lower(), 'Online')
     
     def send_batch_notifications(self, notifications: list) -> Dict[str, Any]:
         """
@@ -251,7 +437,10 @@ class WebhookService:
 
 def create_webhook_service() -> WebhookService:
     """Create webhook service with configuration from environment or settings"""
-    webhook_url = "https://rare-walls-pay.loca.lt/webhook/notification"
-    webhook_secret = "notif_webhook_2025_secure_key_123"
+    import os
+    
+    # Get webhook configuration from environment variables or use defaults
+    webhook_url = os.getenv('WEBHOOK_URL', "https://rare-walls-pay.loca.lt/webhook/notification")
+    webhook_secret = os.getenv('WEBHOOK_SECRET', "notif_webhook_2025_secure_key_123")
     
     return WebhookService(webhook_url, webhook_secret)
