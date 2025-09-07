@@ -1,0 +1,238 @@
+{
+  "templates": {
+    "standard_news_site": {
+      "name": "Standard News Site Template",
+      "description": "Template for standard news/announcement websites",
+      "parsing_strategy": "standard",
+      "selectors": {
+        "news_container": ".news-item, .announcement, .update-item, .post",
+        "title": "h1, h2, h3, .title, .headline, a",
+        "date": ".date, .publish-date, .timestamp, .time",
+        "link": "a"
+      },
+      "keywords": [
+        "exam",
+        "notification",
+        "result",
+        "admit card",
+        "application",
+        "registration"
+      ],
+      "priority": "medium"
+    },
+
+    "multi_section_site": {
+      "name": "Multi-Section Site Template",
+      "description": "Template for sites with multiple announcement sections",
+      "parsing_strategy": "multi_section",
+      "sections": [
+        {
+          "name": "main_announcements",
+          "container_selector": ".main-news, .primary-announcements",
+          "selectors": {
+            "title": "h2, .title",
+            "date": ".date",
+            "link": "a"
+          }
+        },
+        {
+          "name": "secondary_updates",
+          "container_selector": ".secondary-news, .updates",
+          "selectors": {
+            "title": "h3, .title",
+            "date": ".date",
+            "link": "a"
+          }
+        }
+      ],
+      "keywords": ["exam", "notification", "result", "admit card"],
+      "priority": "medium"
+    },
+
+    "dynamic_adaptive": {
+      "name": "Dynamic Adaptive Template",
+      "description": "Template that tries multiple selector strategies",
+      "parsing_strategy": "dynamic",
+      "dynamic_selectors": [
+        {
+          "name": "strategy_1",
+          "container": ".news-container, .announcements",
+          "selectors": {
+            "title": "h2, .title",
+            "date": ".date",
+            "link": "a"
+          }
+        },
+        {
+          "name": "strategy_2",
+          "container": ".updates, .notifications",
+          "selectors": {
+            "title": "h3, .headline",
+            "date": ".publish-date",
+            "link": "a"
+          }
+        },
+        {
+          "name": "strategy_3",
+          "container": ".post, .item",
+          "selectors": {
+            "title": "h1, h2, h3",
+            "date": ".date, .time",
+            "link": "a"
+          }
+        }
+      ],
+      "keywords": ["exam", "notification", "result"],
+      "priority": "medium"
+    },
+
+    "api_based": {
+      "name": "API-Based Template",
+      "description": "Template for sites that provide API endpoints",
+      "parsing_strategy": "api",
+      "api_config": {
+        "url": "https://api.example.com/announcements",
+        "method": "GET",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "params": {
+          "limit": 50,
+          "type": "exam"
+        },
+        "data_path": "data.announcements",
+        "field_mapping": {
+          "title": "title",
+          "date": "published_at",
+          "url": "link",
+          "content": "summary"
+        }
+      },
+      "keywords": ["exam", "notification", "result"],
+      "priority": "medium"
+    },
+
+    "ticker_marquee": {
+      "name": "Ticker/Marquee Template",
+      "description": "Template for sites with ticker or marquee announcements",
+      "parsing_strategy": "standard",
+      "selectors": {
+        "news_container": ".ticker, .marquee, .scrolling-news, .news-ticker",
+        "title": "li, .ticker-item, .marquee-item",
+        "date": ".date, .time",
+        "link": "a"
+      },
+      "keywords": ["exam", "notification", "result", "admit card"],
+      "priority": "high"
+    }
+  },
+
+  "exam_specific_templates": {
+    "jee_main": {
+      "name": "JEE Main Template",
+      "description": "Template specifically designed for JEE Main websites",
+      "parsing_strategy": "multi_section",
+      "sections": [
+        {
+          "name": "news_ticker",
+          "container_selector": ".newsticker .slides li, .ticker li",
+          "selectors": {
+            "title": "",
+            "date": "",
+            "link": "a"
+          }
+        },
+        {
+          "name": "notices",
+          "container_selector": ".scrollable-notices a, .notice-item",
+          "selectors": {
+            "title": "",
+            "date": "",
+            "link": ""
+          }
+        }
+      ],
+      "keywords": [
+        "jee",
+        "main",
+        "exam",
+        "admit card",
+        "result",
+        "application",
+        "registration",
+        "notification"
+      ],
+      "priority": "high",
+      "exam_type": "jee_main"
+    },
+
+    "gate": {
+      "name": "GATE Template",
+      "description": "Template specifically designed for GATE websites",
+      "parsing_strategy": "multi_section",
+      "sections": [
+        {
+          "name": "ticker",
+          "container_selector": ".ticker .news .news-content",
+          "selectors": {
+            "title": "",
+            "date": "",
+            "link": ""
+          }
+        },
+        {
+          "name": "important_dates",
+          "container_selector": ".imp-dates-item li",
+          "selectors": {
+            "title": "",
+            "date": ".text-warning",
+            "link": ""
+          }
+        },
+        {
+          "name": "highlights",
+          "container_selector": ".highlight-item",
+          "selectors": {
+            "title": ".title a",
+            "date": "",
+            "link": ".title a"
+          }
+        }
+      ],
+      "keywords": [
+        "gate",
+        "exam",
+        "application",
+        "result",
+        "admit card",
+        "registration",
+        "notification"
+      ],
+      "priority": "high",
+      "exam_type": "gate"
+    },
+
+    "upsc": {
+      "name": "UPSC Template",
+      "description": "Template specifically designed for UPSC websites",
+      "parsing_strategy": "standard",
+      "selectors": {
+        "news_container": ".whats-new, .latest-updates, .announcements",
+        "title": "h3, .title, .announcement-title",
+        "date": ".date, .publish-date",
+        "link": "a"
+      },
+      "keywords": [
+        "upsc",
+        "civil services",
+        "exam",
+        "notification",
+        "result",
+        "admit card",
+        "application"
+      ],
+      "priority": "high",
+      "exam_type": "upsc"
+    }
+  }
+}

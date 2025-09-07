@@ -1,0 +1,48 @@
+{
+  "name": "Complex Exam Portal",
+  "url": "https://example-exam-portal.com/",
+  "scraper_class": "ConfigurableScraper",
+  "parsing_strategy": "multi_section",
+  "sections": [
+    {
+      "name": "main_announcements",
+      "container_selector": ".main-news, .primary-announcements",
+      "selectors": {
+        "title": "h2, .title",
+        "date": ".date, .publish-date",
+        "link": "a"
+      }
+    },
+    {
+      "name": "secondary_updates",
+      "container_selector": ".secondary-news, .updates",
+      "selectors": {
+        "title": "h3, .title",
+        "date": ".date, .timestamp",
+        "link": "a"
+      }
+    },
+    {
+      "name": "ticker_news",
+      "container_selector": ".ticker, .marquee, .scrolling-news",
+      "selectors": {
+        "title": "li, .ticker-item",
+        "date": ".date, .time",
+        "link": "a"
+      }
+    }
+  ],
+  "keywords": [
+    "exam",
+    "notification",
+    "result",
+    "admit card",
+    "application",
+    "registration",
+    "important",
+    "schedule"
+  ],
+  "enabled": true,
+  "priority": "medium",
+  "exam_type": "custom"
+}

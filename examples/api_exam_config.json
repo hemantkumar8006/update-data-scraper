@@ -1,0 +1,30 @@
+{
+  "name": "API-Based Exam Portal",
+  "url": "https://api-exam-portal.com/",
+  "scraper_class": "ConfigurableScraper",
+  "parsing_strategy": "api",
+  "api_config": {
+    "url": "https://api-exam-portal.com/announcements",
+    "method": "GET",
+    "headers": {
+      "Accept": "application/json",
+      "Authorization": "Bearer YOUR_API_KEY"
+    },
+    "params": {
+      "limit": 50,
+      "type": "exam",
+      "status": "active"
+    },
+    "data_path": "data.announcements",
+    "field_mapping": {
+      "title": "title",
+      "date": "published_at",
+      "url": "link",
+      "content": "summary"
+    }
+  },
+  "keywords": ["exam", "notification", "result", "admit card"],
+  "enabled": true,
+  "priority": "high",
+  "exam_type": "api_based"
+}

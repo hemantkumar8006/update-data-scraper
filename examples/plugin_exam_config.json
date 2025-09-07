@@ -1,0 +1,31 @@
+{
+  "name": "NTA Advanced with Plugin",
+  "url": "https://jeemain.nta.nic.in/",
+  "scraper_class": "ConfigurableScraper",
+  "parsing_strategy": "standard",
+  "custom_parsers": {
+    "nta_advanced": {
+      "module": "plugins.example_plugins",
+      "class": "NTAAdvancedPlugin"
+    }
+  },
+  "selectors": {
+    "news_container": ".news-item, .announcement",
+    "title": "h2, .title",
+    "date": ".date, .publish-date",
+    "link": "a"
+  },
+  "keywords": [
+    "jee",
+    "main",
+    "exam",
+    "admit card",
+    "result",
+    "application",
+    "registration",
+    "notification"
+  ],
+  "enabled": true,
+  "priority": "high",
+  "exam_type": "jee_main"
+}

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Exam Scraper Configuration</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        font-size: 1.2em;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 40px;
+      }
+
+      .tabs {
+        display: flex;
+        border-bottom: 2px solid #e0e0e0;
+        margin-bottom: 30px;
+      }
+
+      .tab {
+        padding: 15px 30px;
+        cursor: pointer;
+        border: none;
+        background: none;
+        font-size: 1.1em;
+        color: #666;
+        transition: all 0.3s ease;
+      }
+
+      .tab.active {
+        color: #4facfe;
+        border-bottom: 3px solid #4facfe;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .form-group {
+        margin-bottom: 25px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: border-color 0.3s ease;
+      }
+
+      .form-group input:focus,
+      .form-group select:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #4facfe;
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      .btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-right: 10px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+      }
+
+      .btn-secondary {
+        background: #6c757d;
+        color: white;
+      }
+
+      .btn-success {
+        background: #28a745;
+        color: white;
+      }
+
+      .btn-warning {
+        background: #ffc107;
+        color: #212529;
+      }
+
+      .template-card {
+        border: 2px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .template-card:hover {
+        border-color: #4facfe;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .template-card.selected {
+        border-color: #4facfe;
+        background: #f8f9ff;
+      }
+
+      .template-card h3 {
+        color: #333;
+        margin-bottom: 10px;
+      }
+
+      .template-card p {
+        color: #666;
+        line-height: 1.5;
+      }
+
+      .status-message {
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: none;
+      }
+
+      .status-message.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+
+      .status-message.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      .status-message.warning {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+      }
+
+      .keywords-input {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .keyword-tag {
+        background: #4facfe;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .keyword-tag .remove {
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      .keyword-input {
+        border: none;
+        outline: none;
+        padding: 5px;
+        min-width: 100px;
+      }
+
+      .config-preview {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+      }
+
+      .config-preview h3 {
+        margin-bottom: 15px;
+        color: #333;
+      }
+
+      .config-preview pre {
+        background: #2d3748;
+        color: #e2e8f0;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        font-size: 0.9em;
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        padding: 20px;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #4facfe;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 10px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .exam-type-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .exam-type-card {
+        border: 2px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .exam-type-card:hover {
+        border-color: #4facfe;
+        transform: translateY(-2px);
+      }
+
+      .exam-type-card.selected {
+        border-color: #4facfe;
+        background: #f8f9ff;
+      }
+
+      .exam-type-card h4 {
+        color: #333;
+        margin-bottom: 10px;
+      }
+
+      .exam-type-card p {
+        color: #666;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎓 Exam Scraper Configuration</h1>
+        <p>Add support for new exams without writing code</p>
+      </div>
+
+      <div class="content">
+        <div class="tabs">
+          <button class="tab active" onclick="showTab('quick-setup')">
+            Quick Setup
+          </button>
+          <button class="tab" onclick="showTab('advanced')">
+            Advanced Configuration
+          </button>
+          <button class="tab" onclick="showTab('templates')">Templates</button>
+          <button class="tab" onclick="showTab('manage')">
+            Manage Existing
+          </button>
+        </div>
+
+        <div id="status-message" class="status-message"></div>
+
+        <!-- Quick Setup Tab -->
+        <div id="quick-setup" class="tab-content active">
+          <h2>🚀 Quick Setup - Add New Exam</h2>
+          <p>
+            Enter the exam website URL and we'll automatically generate the
+            configuration for you.
+          </p>
+
+          <div class="form-group">
+            <label for="exam-url">Exam Website URL *</label>
+            <input
+              type="url"
+              id="exam-url"
+              placeholder="https://example.com"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Exam Type</label>
+            <div class="exam-type-grid">
+              <div class="exam-type-card" data-type="jee_main">
+                <h4>JEE Main</h4>
+                <p>Joint Entrance Examination Main</p>
+              </div>
+              <div class="exam-type-card" data-type="jee_advanced">
+                <h4>JEE Advanced</h4>
+                <p>Joint Entrance Examination Advanced</p>
+              </div>
+              <div class="exam-type-card" data-type="gate">
+                <h4>GATE</h4>
+                <p>Graduate Aptitude Test in Engineering</p>
+              </div>
+              <div class="exam-type-card" data-type="upsc">
+                <h4>UPSC</h4>
+                <p>Union Public Service Commission</p>
+              </div>
+              <div class="exam-type-card" data-type="neet">
+                <h4>NEET</h4>
+                <p>National Eligibility cum Entrance Test</p>
+              </div>
+              <div class="exam-type-card" data-type="cat">
+                <h4>CAT</h4>
+                <p>Common Admission Test</p>
+              </div>
+              <div class="exam-type-card" data-type="other">
+                <h4>Other</h4>
+                <p>Custom exam type</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="exam-name">Exam Name *</label>
+            <input
+              type="text"
+              id="exam-name"
+              placeholder="e.g., JEE Main 2024"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="custom-keywords">Keywords (Optional)</label>
+            <div class="keywords-input" id="keywords-container">
+              <input
+                type="text"
+                class="keyword-input"
+                id="keyword-input"
+                placeholder="Type keyword and press Enter"
+              />
+            </div>
+            <small
+              >Keywords help filter relevant content. Leave empty to include all
+              content.</small
+            >
+          </div>
+
+          <button class="btn btn-primary" onclick="generateConfig()">
+            🔍 Analyze Website & Generate Config
+          </button>
+          <button class="btn btn-secondary" onclick="testConfig()">
+            🧪 Test Configuration
+          </button>
+          <button class="btn btn-success" onclick="saveConfig()">
+            💾 Save Configuration
+          </button>
+
+          <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing website structure...</p>
+          </div>
+
+          <div class="config-preview" id="config-preview" style="display: none">
+            <h3>Generated Configuration</h3>
+            <pre id="config-json"></pre>
+          </div>
+        </div>
+
+        <!-- Advanced Configuration Tab -->
+        <div id="advanced" class="tab-content">
+          <h2>⚙️ Advanced Configuration</h2>
+          <p>Fine-tune the scraper configuration for complex websites.</p>
+
+          <div class="form-group">
+            <label for="parsing-strategy">Parsing Strategy</label>
+            <select id="parsing-strategy">
+              <option value="standard">Standard - Single container</option>
+              <option value="multi_section">
+                Multi-Section - Multiple containers
+              </option>
+              <option value="dynamic">Dynamic - Try multiple strategies</option>
+              <option value="api">API-Based - JSON/REST API</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="news-container">News Container Selector</label>
+              <input
+                type="text"
+                id="news-container"
+                placeholder=".news, .announcement, .update"
+              />
+            </div>
+            <div class="form-group">
+              <label for="title-selector">Title Selector</label>
+              <input
+                type="text"
+                id="title-selector"
+                placeholder="h1, h2, h3, .title"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="date-selector">Date Selector</label>
+              <input
+                type="text"
+                id="date-selector"
+                placeholder=".date, .publish-date"
+              />
+            </div>
+            <div class="form-group">
+              <label for="link-selector">Link Selector</label>
+              <input type="text" id="link-selector" placeholder="a" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="priority">Priority</label>
+            <select id="priority">
+              <option value="high">High</option>
+              <option value="medium" selected>Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary" onclick="updateAdvancedConfig()">
+            Update Configuration
+          </button>
+          <button class="btn btn-warning" onclick="resetAdvancedConfig()">
+            Reset to Defaults
+          </button>
+        </div>
+
+        <!-- Templates Tab -->
+        <div id="templates" class="tab-content">
+          <h2>📋 Configuration Templates</h2>
+          <p>Choose from pre-built templates for common website patterns.</p>
+
+          <div id="templates-container">
+            <!-- Templates will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Manage Existing Tab -->
+        <div id="manage" class="tab-content">
+          <h2>📊 Manage Existing Configurations</h2>
+          <p>View, edit, or remove existing scraper configurations.</p>
+
+          <div id="existing-configs">
+            <!-- Existing configurations will be loaded here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentConfig = null;
+      let selectedExamType = null;
+      let keywords = [];
+
+      // Tab switching
+      function showTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll(".tab-content").forEach((content) => {
+          content.classList.remove("active");
+        });
+
+        // Remove active class from all tabs
+        document.querySelectorAll(".tab").forEach((tab) => {
+          tab.classList.remove("active");
+        });
+
+        // Show selected tab content
+        document.getElementById(tabName).classList.add("active");
+
+        // Add active class to clicked tab
+        event.target.classList.add("active");
+      }
+
+      // Exam type selection
+      document.querySelectorAll(".exam-type-card").forEach((card) => {
+        card.addEventListener("click", function () {
+          document
+            .querySelectorAll(".exam-type-card")
+            .forEach((c) => c.classList.remove("selected"));
+          this.classList.add("selected");
+          selectedExamType = this.dataset.type;
+        });
+      });
+
+      // Keywords management
+      document
+        .getElementById("keyword-input")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const keyword = this.value.trim();
+            if (keyword && !keywords.includes(keyword)) {
+              keywords.push(keyword);
+              updateKeywordsDisplay();
+              this.value = "";
+            }
+          }
+        });
+
+      function updateKeywordsDisplay() {
+        const container = document.getElementById("keywords-container");
+        container.innerHTML =
+          keywords
+            .map(
+              (keyword) =>
+                `<span class="keyword-tag">${keyword} <span class="remove" onclick="removeKeyword('${keyword}')">×</span></span>`
+            )
+            .join("") +
+          '<input type="text" class="keyword-input" id="keyword-input" placeholder="Type keyword and press Enter">';
+
+        // Re-attach event listener
+        document
+          .getElementById("keyword-input")
+          .addEventListener("keypress", function (e) {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const keyword = this.value.trim();
+              if (keyword && !keywords.includes(keyword)) {
+                keywords.push(keyword);
+                updateKeywordsDisplay();
+                this.value = "";
+              }
+            }
+          });
+      }
+
+      function removeKeyword(keyword) {
+        keywords = keywords.filter((k) => k !== keyword);
+        updateKeywordsDisplay();
+      }
+
+      // Generate configuration
+      async function generateConfig() {
+        const url = document.getElementById("exam-url").value;
+        const name = document.getElementById("exam-name").value;
+
+        if (!url || !name) {
+          showMessage("Please fill in all required fields", "error");
+          return;
+        }
+
+        showLoading(true);
+
+        try {
+          const response = await fetch("/api/generate-config", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              url: url,
+              exam_type: selectedExamType,
+              name: name,
+              keywords: keywords,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            currentConfig = result.config;
+            showConfigPreview(currentConfig);
+            showMessage("Configuration generated successfully!", "success");
+          } else {
+            showMessage(
+              "Failed to generate configuration: " + result.error,
+              "error"
+            );
+          }
+        } catch (error) {
+          showMessage(
+            "Error generating configuration: " + error.message,
+            "error"
+          );
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // Test configuration
+      async function testConfig() {
+        if (!currentConfig) {
+          showMessage("Please generate a configuration first", "warning");
+          return;
+        }
+
+        showLoading(true);
+
+        try {
+          const response = await fetch("/api/test-config", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(currentConfig),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showMessage(
+              `Test successful! Found ${result.updates_found} updates.`,
+              "success"
+            );
+          } else {
+            showMessage("Test failed: " + result.error, "error");
+          }
+        } catch (error) {
+          showMessage("Error testing configuration: " + error.message, "error");
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // Save configuration
+      async function saveConfig() {
+        if (!currentConfig) {
+          showMessage("Please generate a configuration first", "warning");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/save-config", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(currentConfig),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showMessage("Configuration saved successfully!", "success");
+            loadExistingConfigs();
+          } else {
+            showMessage(
+              "Failed to save configuration: " + result.error,
+              "error"
+            );
+          }
+        } catch (error) {
+          showMessage("Error saving configuration: " + error.message, "error");
+        }
+      }
+
+      // Utility functions
+      function showMessage(message, type) {
+        const messageEl = document.getElementById("status-message");
+        messageEl.textContent = message;
+        messageEl.className = `status-message ${type}`;
+        messageEl.style.display = "block";
+
+        setTimeout(() => {
+          messageEl.style.display = "none";
+        }, 5000);
+      }
+
+      function showLoading(show) {
+        document.getElementById("loading").style.display = show
+          ? "block"
+          : "none";
+      }
+
+      function showConfigPreview(config) {
+        document.getElementById("config-json").textContent = JSON.stringify(
+          config,
+          null,
+          2
+        );
+        document.getElementById("config-preview").style.display = "block";
+      }
+
+      // Load templates
+      async function loadTemplates() {
+        try {
+          const response = await fetch("/api/templates");
+          const templates = await response.json();
+
+          const container = document.getElementById("templates-container");
+          container.innerHTML = templates
+            .map(
+              (template) => `
+                    <div class="template-card" onclick="selectTemplate('${template.name}')">
+                        <h3>${template.name}</h3>
+                        <p>${template.description}</p>
+                    </div>
+                `
+            )
+            .join("");
+        } catch (error) {
+          console.error("Error loading templates:", error);
+        }
+      }
+
+      // Load existing configurations
+      async function loadExistingConfigs() {
+        try {
+          const response = await fetch("/api/configs");
+          const configs = await response.json();
+
+          const container = document.getElementById("existing-configs");
+          container.innerHTML = configs
+            .map(
+              (config) => `
+                    <div class="template-card">
+                        <h3>${config.name}</h3>
+                        <p><strong>URL:</strong> ${config.url}</p>
+                        <p><strong>Exam Type:</strong> ${
+                          config.exam_type || "Not specified"
+                        }</p>
+                        <p><strong>Status:</strong> ${
+                          config.enabled ? "Enabled" : "Disabled"
+                        }</p>
+                        <button class="btn btn-primary" onclick="editConfig('${
+                          config.name
+                        }')">Edit</button>
+                        <button class="btn btn-warning" onclick="toggleConfig('${
+                          config.name
+                        }')">${config.enabled ? "Disable" : "Enable"}</button>
+                        <button class="btn btn-secondary" onclick="deleteConfig('${
+                          config.name
+                        }')">Delete</button>
+                    </div>
+                `
+            )
+            .join("");
+        } catch (error) {
+          console.error("Error loading configurations:", error);
+        }
+      }
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", function () {
+        loadTemplates();
+        loadExistingConfigs();
+      });
+    </script>
+  </body>
+</html>

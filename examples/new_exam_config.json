@@ -1,0 +1,27 @@
+{
+  "name": "NEET 2024",
+  "url": "https://neet.nta.nic.in/",
+  "scraper_class": "ConfigurableScraper",
+  "parsing_strategy": "standard",
+  "selectors": {
+    "news_container": ".news-item, .announcement, .update-item, .post",
+    "title": "h1, h2, h3, .title, .headline, a",
+    "date": ".date, .publish-date, .timestamp, .time",
+    "link": "a"
+  },
+  "keywords": [
+    "neet",
+    "exam",
+    "admit card",
+    "result",
+    "application",
+    "registration",
+    "notification",
+    "important",
+    "schedule",
+    "answer key"
+  ],
+  "enabled": true,
+  "priority": "high",
+  "exam_type": "neet"
+}

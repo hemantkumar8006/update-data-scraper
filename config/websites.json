@@ -20,7 +20,7 @@
         "registration",
         "notification"
       ],
-      "enabled": true,
+      "enabled": false,
       "priority": "high"
     },
     {
@@ -42,7 +42,7 @@
         "admit card",
         "notification"
       ],
-      "enabled": true,
+      "enabled": false,
       "priority": "high"
     },
     {
@@ -64,7 +64,7 @@
         "registration",
         "notification"
       ],
-      "enabled": true,
+      "enabled": false,
       "priority": "medium"
     },
     {
@@ -86,7 +86,7 @@
         "admit card",
         "application"
       ],
-      "enabled": true,
+      "enabled": false,
       "priority": "high"
     },
     {
