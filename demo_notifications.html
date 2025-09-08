@@ -724,6 +724,11 @@
                         })">
                             ✏️ Edit
                         </button>
+                        <button class="btn btn-success btn-sm" onclick="sendToBot(${
+                          notification.id
+                        })">
+                            🤖 Send to Bot
+                        </button>
                         <button class="btn btn-danger btn-sm" onclick="deleteNotification(${
                           notification.id
                         })">
@@ -786,6 +791,47 @@
           toast.classList.remove("show");
           setTimeout(() => document.body.removeChild(toast), 300);
         }, 3000);
+      }
+
+      // Send a notification to the Bot via server webhook
+      async function sendToBot(id) {
+        const notification = notifications.find((n) => n.id === id);
+        if (!notification) return;
+
+        try {
+          const response = await fetch("/demo/send_to_bot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: notification.title,
+              content: notification.content,
+              examType: notification.examType,
+              source: notification.source,
+              priority: notification.priority,
+              url: notification.url,
+              date: notification.date,
+              scrapedAt: notification.scrapedAt,
+            }),
+          });
+
+          const data = await response.json();
+          if (response.ok && data.success) {
+            showToast("Notification sent to Bot", "success");
+          } else {
+            if (data.queued) {
+              showToast("Send failed. Added to retry queue", "warning");
+            } else {
+              showToast(
+                data.error
+                  ? `Failed to send: ${data.error}`
+                  : "Failed to send to Bot",
+                "error"
+              );
+            }
+          }
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "error");
+        }
       }
 
       // Get toast icon based on type
