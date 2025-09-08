@@ -1,0 +1,26 @@
+[
+  {
+    "id": 2,
+    "title": "GATE 2024 Admit Card Released",
+    "content": "GATE 2024 admit cards are now available for download. Candidates can access their admit cards from the official GATE website using their login credentials.",
+    "examType": "gate",
+    "source": "IIT",
+    "priority": "high",
+    "url": "https://gate.iit.ac.in",
+    "date": "2024-01-10",
+    "scrapedAt": "2025-09-08T06:55:02.940Z",
+    "contentHash": "1720869123"
+  },
+  {
+    "id": 1,
+    "title": "JEE Main 2024 Registration Extended",
+    "content": "The registration deadline for JEE Main 2024 has been extended to December 15, 2023. Students can now register through the official NTA website.",
+    "examType": "jee",
+    "source": "NTA",
+    "priority": "high",
+    "url": "https://jeemain.nta.ac.in",
+    "date": "2024-01-15",
+    "scrapedAt": "2025-09-08T06:55:02.935Z",
+    "contentHash": "102893705"
+  }
+]

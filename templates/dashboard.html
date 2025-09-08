@@ -421,6 +421,89 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
       }
 
+      .progress-container {
+        margin: 20px 0;
+        display: none;
+      }
+
+      .progress-container.show {
+        display: block;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 10px;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        border-radius: 4px;
+        width: 0%;
+        transition: width 0.3s ease;
+        position: relative;
+      }
+
+      .progress-fill::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background-image: linear-gradient(
+          -45deg,
+          rgba(255, 255, 255, 0.2) 25%,
+          transparent 25%,
+          transparent 50%,
+          rgba(255, 255, 255, 0.2) 50%,
+          rgba(255, 255, 255, 0.2) 75%,
+          transparent 75%,
+          transparent
+        );
+        background-size: 20px 20px;
+        animation: progress-stripes 1s linear infinite;
+      }
+
+      @keyframes progress-stripes {
+        0% {
+          background-position: 0 0;
+        }
+        100% {
+          background-position: 20px 0;
+        }
+      }
+
+      .progress-text {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.9rem;
+        color: #666;
+      }
+
+      .progress-status {
+        font-weight: 600;
+        color: #4facfe;
+      }
+
+      .progress-details {
+        font-size: 0.8rem;
+        color: #999;
+      }
+
+      .webhook-progress {
+        background: rgba(79, 172, 254, 0.1);
+        border: 1px solid rgba(79, 172, 254, 0.2);
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 15px;
+      }
+
       @media (max-width: 768px) {
         .dashboard-grid {
           grid-template-columns: 1fr;
@@ -512,6 +595,22 @@
             >
               <span id="clearQueueBtnText">🗑️ Clear Queue</span>
             </button>
+
+            <!-- Progress Bar for Webhook Operations -->
+            <div
+              class="webhook-progress progress-container"
+              id="webhookProgress"
+            >
+              <div class="progress-text">
+                <span class="progress-status" id="progressStatus"
+                  >Preparing notifications...</span
+                >
+                <span class="progress-details" id="progressDetails">0/0</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+            </div>
           </div>
 
           <div style="margin-bottom: 20px">
@@ -791,12 +890,16 @@
           if (data.success) {
             const queueStatus = data.queue_status;
             const statusElement = document.getElementById("queueStatus");
+            const progressContainer =
+              document.getElementById("webhookProgress");
 
             const totalPending = queueStatus.status_counts?.pending || 0;
             const totalSending = queueStatus.status_counts?.sending || 0;
             const totalSent = queueStatus.status_counts?.sent || 0;
             const totalFailed = queueStatus.status_counts?.failed || 0;
             const totalRetry = queueStatus.status_counts?.retry || 0;
+            const totalProcessing = totalPending + totalSending + totalRetry;
+            const totalCompleted = totalSent + totalFailed;
 
             let statusText = "";
             let statusClass = "status-stopped";
@@ -804,14 +907,43 @@
             if (totalPending > 0 || totalSending > 0 || totalRetry > 0) {
               statusClass = "status-running";
               statusText = `Processing: ${totalPending} pending, ${totalSending} sending, ${totalRetry} retry`;
+
+              // Show progress bar if there are active notifications being processed
+              if (!progressContainer.classList.contains("show")) {
+                progressContainer.classList.add("show");
+                const total = totalProcessing + totalCompleted;
+                const percentage =
+                  totalCompleted > 0
+                    ? Math.round((totalCompleted / total) * 100)
+                    : 0;
+                updateProgress(
+                  percentage,
+                  "Processing notifications...",
+                  `${totalCompleted}/${total}`
+                );
+              }
             } else if (totalSent > 0) {
               statusClass = "status-running";
               statusText = `Completed: ${totalSent} sent`;
+
+              // Hide progress bar if processing is complete
+              if (progressContainer.classList.contains("show")) {
+                setTimeout(() => {
+                  progressContainer.classList.remove("show");
+                  updateProgress(0, "Preparing notifications...", "0/0");
+                }, 2000);
+              }
             } else if (totalFailed > 0) {
               statusClass = "status-error";
               statusText = `Failed: ${totalFailed} failed`;
             } else {
               statusText = "Queue empty";
+
+              // Hide progress bar if queue is empty
+              if (progressContainer.classList.contains("show")) {
+                progressContainer.classList.remove("show");
+                updateProgress(0, "Preparing notifications...", "0/0");
+              }
             }
 
             statusElement.innerHTML = `
@@ -990,16 +1122,48 @@
         });
       }
 
+      // Update progress bar
+      function updateProgress(percentage, status, details) {
+        const progressFill = document.getElementById("progressFill");
+        const progressStatus = document.getElementById("progressStatus");
+        const progressDetails = document.getElementById("progressDetails");
+
+        if (progressFill) {
+          progressFill.style.width = `${percentage}%`;
+        }
+        if (progressStatus) {
+          progressStatus.textContent = status;
+        }
+        if (progressDetails) {
+          progressDetails.textContent = details;
+        }
+      }
+
       // Send notifications to webhook
       async function sendWebhookNotifications() {
         const webhookBtn = document.getElementById("webhookBtn");
         const webhookBtnText = document.getElementById("webhookBtnText");
+        const progressContainer = document.getElementById("webhookProgress");
+        const progressStatus = document.getElementById("progressStatus");
+        const progressDetails = document.getElementById("progressDetails");
+        const progressFill = document.getElementById("progressFill");
 
         // Disable button and show loading
         webhookBtn.disabled = true;
         webhookBtnText.textContent = "📤 Sending...";
 
+        // Show progress bar
+        progressContainer.classList.add("show");
+        updateProgress(0, "Preparing notifications...", "0/0");
+
         try {
+          // Simulate progress for better UX
+          updateProgress(20, "Fetching notifications...", "0/0");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          updateProgress(40, "Adding to webhook queue...", "0/0");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           const response = await fetch("/notifications/send-webhook", {
             method: "POST",
             headers: {
@@ -1007,9 +1171,21 @@
             },
           });
 
+          updateProgress(60, "Sending to bot...", "0/0");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           const result = await response.json();
 
+          updateProgress(80, "Processing response...", "0/0");
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
           if (result.success) {
+            updateProgress(
+              100,
+              "✅ Completed successfully!",
+              `${result.notifications_sent || 0} notifications sent`
+            );
+
             showToast(
               `✅ ${result.message} (${result.notifications_sent} notifications sent)`,
               "success"
@@ -1032,6 +1208,7 @@
               }
             }
           } else {
+            updateProgress(100, "❌ Failed", "Error occurred");
             showToast(
               `❌ Webhook failed: ${result.error || result.message}`,
               "error"
@@ -1039,11 +1216,18 @@
           }
         } catch (error) {
           console.error("Error sending webhook notifications:", error);
+          updateProgress(100, "❌ Error", "Connection failed");
           showToast("Error sending webhook notifications", "error");
         } finally {
-          // Re-enable button
+          // Re-enable button and hide progress after delay
           webhookBtn.disabled = false;
           webhookBtnText.textContent = "📤 Send to Bot";
+
+          // Hide progress bar after 3 seconds
+          setTimeout(() => {
+            progressContainer.classList.remove("show");
+            updateProgress(0, "Preparing notifications...", "0/0");
+          }, 3000);
         }
       }
 
@@ -1051,12 +1235,20 @@
       async function testWebhook() {
         const testBtn = document.getElementById("testWebhookBtn");
         const testBtnText = document.getElementById("testWebhookBtnText");
+        const progressContainer = document.getElementById("webhookProgress");
 
         // Disable button and show loading
         testBtn.disabled = true;
         testBtnText.textContent = "🧪 Testing...";
 
+        // Show progress bar
+        progressContainer.classList.add("show");
+        updateProgress(0, "Testing webhook connection...", "0/0");
+
         try {
+          updateProgress(30, "Connecting to bot...", "0/0");
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
           const response = await fetch("/webhook/test", {
             method: "POST",
             headers: {
@@ -1064,9 +1256,13 @@
             },
           });
 
+          updateProgress(70, "Processing response...", "0/0");
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
           const result = await response.json();
 
           if (result.success) {
+            updateProgress(100, "✅ Test successful!", "Bot is reachable");
             showToast(
               "✅ Webhook test successful! Bot is reachable.",
               "success"
@@ -1083,6 +1279,7 @@
               }
             }
           } else {
+            updateProgress(100, "❌ Test failed", "Connection error");
             showToast(
               `❌ Webhook test failed: ${result.error || result.message}`,
               "error"
@@ -1090,11 +1287,18 @@
           }
         } catch (error) {
           console.error("Error testing webhook:", error);
+          updateProgress(100, "❌ Error", "Connection failed");
           showToast("Error testing webhook", "error");
         } finally {
-          // Re-enable button
+          // Re-enable button and hide progress after delay
           testBtn.disabled = false;
           testBtnText.textContent = "🧪 Test Webhook";
+
+          // Hide progress bar after 3 seconds
+          setTimeout(() => {
+            progressContainer.classList.remove("show");
+            updateProgress(0, "Preparing notifications...", "0/0");
+          }, 3000);
         }
       }
 
@@ -1191,6 +1395,130 @@
           );
         }
       }
+
+      // Real-time queue progress streaming
+      (function setupQueueProgressStream() {
+        if (typeof EventSource === "undefined") return;
+
+        const progressContainer = document.getElementById("webhookProgress");
+
+        function computeProgress(counts) {
+          const totalCompleted = (counts.sent || 0) + (counts.failed || 0);
+          const totalProcessing =
+            (counts.pending || 0) + (counts.sending || 0) + (counts.retry || 0);
+          const total = totalCompleted + totalProcessing;
+          const percentage =
+            total > 0 ? Math.round((totalCompleted / total) * 100) : 0;
+          return { percentage, totalCompleted, total };
+        }
+
+        function applyProgressFromStatus(queueStatus) {
+          const counts = queueStatus.status_counts || {};
+          const metrics = queueStatus.metrics || {};
+          const calc = computeProgress(counts);
+          const percentage =
+            typeof metrics.progress_percent === "number"
+              ? metrics.progress_percent
+              : calc.percentage;
+          const totalCompleted =
+            typeof metrics.total_completed === "number"
+              ? metrics.total_completed
+              : calc.totalCompleted;
+          const total =
+            typeof metrics.total_added === "number" && metrics.total_added > 0
+              ? metrics.total_added
+              : calc.total;
+
+          if ((counts.pending || counts.sending || counts.retry) > 0) {
+            if (!progressContainer.classList.contains("show")) {
+              progressContainer.classList.add("show");
+            }
+            updateProgress(
+              percentage,
+              "Processing notifications...",
+              `${totalCompleted}/${total}`
+            );
+          } else if ((counts.sent || 0) > 0) {
+            const completed =
+              typeof metrics.total_completed === "number"
+                ? metrics.total_completed
+                : (counts.sent || 0) + (counts.failed || 0);
+            updateProgress(100, "✅ Completed", `${completed}/${completed}`);
+            setTimeout(() => {
+              progressContainer.classList.remove("show");
+              updateProgress(0, "Preparing notifications...", "0/0");
+            }, 2000);
+          } else {
+            // nothing in queue
+            if (progressContainer.classList.contains("show")) {
+              progressContainer.classList.remove("show");
+            }
+            updateProgress(0, "Preparing notifications...", "0/0");
+          }
+        }
+
+        const qs = new EventSource("/notifications/queue/stream");
+        qs.onmessage = function (event) {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "queue_status" && data.queue_status) {
+              const qs = data.queue_status;
+              applyProgressFromStatus(qs);
+
+              // Update status card with real-time data
+              const statusElement = document.getElementById("queueStatus");
+              const counts = qs.status_counts || {};
+              const m = qs.metrics || {};
+              const pending = counts.pending || 0;
+              const sending = counts.sending || 0;
+              const retry = counts.retry || 0;
+              const sent = counts.sent || 0;
+              const failed = counts.failed || 0;
+
+              let statusText = "Queue empty";
+              let statusClass = "status-stopped";
+              if (pending > 0 || sending > 0 || retry > 0) {
+                statusClass = "status-running";
+                statusText = `Processing: ${pending} pending, ${sending} sending, ${retry} retry`;
+              } else if (sent > 0) {
+                statusClass = "status-running";
+                statusText = `Completed: ${sent} sent`;
+              } else if (failed > 0) {
+                statusClass = "status-error";
+                statusText = `Failed: ${failed} failed`;
+              }
+
+              statusElement.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="status-indicator ${statusClass}"></span>
+                  <span>${statusText}</span>
+                </div>
+                <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">
+                  Queue size: ${qs.queue_size || 0} | Processing: ${
+                qs.processing ? "Yes" : "No"
+              } | Added: ${m.total_added || 0} | Sent: ${
+                m.total_sent || 0
+              } | Failed: ${m.total_failed || 0}
+                </div>
+              `;
+
+              const fill = document.getElementById("progressFill");
+              if (fill) {
+                fill.title = `Added: ${m.total_added || 0}, Sent: ${
+                  m.total_sent || 0
+                }, Failed: ${m.total_failed || 0}, Retried: ${
+                  m.total_retried || 0
+                }`;
+              }
+            }
+          } catch (e) {
+            console.error("Queue stream parse error", e);
+          }
+        };
+        qs.onerror = function (event) {
+          console.warn("Queue status stream error", event);
+        };
+      })();
     </script>
   </body>
 </html>

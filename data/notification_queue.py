@@ -68,6 +68,13 @@ class NotificationQueueManager:
         self.queue = Queue()
         self.processing = False
         self.logger = logging.getLogger(self.__class__.__name__)
+        # Cumulative metrics for observability
+        self.metrics = {
+            'total_added': 0,
+            'total_sent': 0,
+            'total_failed': 0,
+            'total_retried': 0
+        }
         
         # Ensure data directory exists
         os.makedirs(os.path.dirname(self.queue_file), exist_ok=True)
@@ -92,6 +99,16 @@ class NotificationQueueManager:
                         self.queue.put(notification)
                 
                 self.logger.info(f"Loaded {self.queue.qsize()} notifications from queue file")
+
+                # Load persisted metrics if present
+                persisted_metrics = queue_data.get('metrics')
+                if isinstance(persisted_metrics, dict):
+                    self.metrics.update({
+                        'total_added': int(persisted_metrics.get('total_added', 0)),
+                        'total_sent': int(persisted_metrics.get('total_sent', 0)),
+                        'total_failed': int(persisted_metrics.get('total_failed', 0)),
+                        'total_retried': int(persisted_metrics.get('total_retried', 0)),
+                    })
         except Exception as e:
             self.logger.error(f"Error loading queue: {e}")
     
@@ -122,7 +139,8 @@ class NotificationQueueManager:
             queue_data = {
                 'queue': queue_items,
                 'last_updated': datetime.now().isoformat(),
-                'total_items': len(queue_items)
+                'total_items': len(queue_items),
+                'metrics': self.metrics
             }
             
             with open(self.queue_file, 'w', encoding='utf-8') as f:
@@ -153,6 +171,8 @@ class NotificationQueueManager:
         
         self.queue.put(queued_notification)
         self.logger.info(f"Added notification {notification_id} to queue")
+        # Metrics
+        self.metrics['total_added'] += 1
         
         # Save queue state
         self._save_queue()
@@ -230,6 +250,8 @@ class NotificationQueueManager:
                 notification.status = NotificationStatus.SENT
                 notification.error_message = None
                 self.logger.info(f"✅ Notification {notification.id} sent successfully")
+                # Metrics
+                self.metrics['total_sent'] += 1
             else:
                 # Failed
                 notification.error_message = webhook_result.get('error', 'Unknown error')
@@ -239,10 +261,14 @@ class NotificationQueueManager:
                     notification.status = NotificationStatus.RETRY
                     self.queue.put(notification)  # Put back in queue for retry
                     self.logger.warning(f"⚠️  Notification {notification.id} failed, will retry (attempt {notification.attempts}/{notification.max_attempts})")
+                    # Metrics
+                    self.metrics['total_retried'] += 1
                 else:
                     # Max attempts reached
                     notification.status = NotificationStatus.FAILED
                     self.logger.error(f"❌ Notification {notification.id} failed after {notification.max_attempts} attempts")
+                    # Metrics
+                    self.metrics['total_failed'] += 1
             
             # Save queue state after processing
             self._save_queue()
@@ -275,11 +301,23 @@ class NotificationQueueManager:
                     if status in status_counts:
                         status_counts[status] += 1
             
+            # Derive progress using metrics where possible
+            total_added = int(self.metrics.get('total_added', 0))
+            total_done = int(self.metrics.get('total_sent', 0)) + int(self.metrics.get('total_failed', 0))
+
             return {
                 'queue_size': self.queue.qsize(),
                 'status_counts': status_counts,
                 'processing': self.processing,
-                'last_updated': datetime.now().isoformat()
+                'last_updated': datetime.now().isoformat(),
+                'metrics': {
+                    'total_added': total_added,
+                    'total_sent': int(self.metrics.get('total_sent', 0)),
+                    'total_failed': int(self.metrics.get('total_failed', 0)),
+                    'total_retried': int(self.metrics.get('total_retried', 0)),
+                    'total_completed': total_done,
+                    'progress_percent': (round((total_done / total_added) * 100) if total_added > 0 else 0)
+                }
             }
         except Exception as e:
             self.logger.error(f"Error getting queue status: {e}")

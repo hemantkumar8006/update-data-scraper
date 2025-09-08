@@ -456,6 +456,59 @@ def create_web_interface(server_instance=None):
                 'Access-Control-Allow-Headers': 'Cache-Control'
             }
         )
+
+    @app.route('/notifications/queue/stream')
+    def stream_queue_status():
+        """Stream real-time queue status (for progress bar) using SSE"""
+        if not server_instance:
+            return jsonify({'error': 'Server not running'}), 500
+
+        def generate_queue():
+            last_snapshot = None
+            heartbeat_interval = 15
+            last_heartbeat = time.time()
+
+            while True:
+                try:
+                    current_time = time.time()
+                    queue_status = server_instance.notification_manager.get_queue_status()
+
+                    # Prepare minimal snapshot to detect changes
+                    snapshot = {
+                        'queue_size': queue_status.get('queue_size', 0),
+                        'status_counts': queue_status.get('status_counts', {}),
+                        'processing': queue_status.get('processing', False)
+                    }
+
+                    if snapshot != last_snapshot:
+                        payload = {
+                            'type': 'queue_status',
+                            'queue_status': queue_status,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        yield f"data: {json.dumps(payload)}\n\n"
+                        last_snapshot = snapshot
+
+                    # Heartbeat to keep connection alive
+                    if current_time - last_heartbeat >= heartbeat_interval:
+                        yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
+                        last_heartbeat = current_time
+
+                    time.sleep(1)
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'timestamp': datetime.now().isoformat()})}\n\n"
+                    break
+
+        return app.response_class(
+            generate_queue(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Cache-Control'
+            }
+        )
     
     return app
 

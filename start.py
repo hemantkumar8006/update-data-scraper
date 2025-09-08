@@ -20,7 +20,7 @@ def check_requirements():
     print("✅ .env file found")
     
     # Check if required directories exist
-    required_dirs = ['config', 'scrapers', 'ai_processors', 'data', 'mcp_server', 'utils', 'logs']
+    required_dirs = ['config', 'scrapers', 'data', 'mcp_server', 'utils', 'logs', 'templates']
     for dir_name in required_dirs:
         if not os.path.exists(dir_name):
             print(f"❌ Directory {dir_name} not found")

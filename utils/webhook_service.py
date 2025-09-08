@@ -440,7 +440,7 @@ def create_webhook_service() -> WebhookService:
     import os
     
     # Get webhook configuration from environment variables or use defaults
-    webhook_url = os.getenv('WEBHOOK_URL', "https://rare-walls-pay.loca.lt/webhook/notification")
-    webhook_secret = os.getenv('WEBHOOK_SECRET', "notif_webhook_2025_secure_key_123")
+    webhook_url = os.getenv('WEBHOOK_URL', 'https://notification-bot-1757186587.loca.lt/webhook/notification')
+    webhook_secret = os.getenv('WEBHOOK_SECRET', 'notif_webhook_2025_secure_key_123')
     
     return WebhookService(webhook_url, webhook_secret)
