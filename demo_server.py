@@ -115,7 +115,7 @@ def main():
     with socketserver.TCPServer(("", PORT), DemoHTTPRequestHandler) as httpd:
         print(f"🚀 Demo server running at http://localhost:{PORT}")
         print(f"📝 Demo notifications page: http://localhost:{PORT}/demo")
-        print(f"🎓 Main dashboard: http://localhost:5000")
+        print(f"🎓 Main dashboard: http://localhost:6000")
         print("Press Ctrl+C to stop the server")
         
         Timer(1.0, open_browser).start()

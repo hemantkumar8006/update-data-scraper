@@ -22,7 +22,7 @@ LOG_FILE = 'logs/scraper.log'
 
 # Web Interface
 WEB_HOST = '0.0.0.0'
-WEB_PORT = 5000
+WEB_PORT = 6000
 
 # AI Processing
 AI_BATCH_SIZE = 5
