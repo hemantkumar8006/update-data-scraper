@@ -11,7 +11,7 @@ def run_demo_server():
 
 def run_main_server():
     """Run the main scraper server"""
-    print("🎓 Starting main scraper server on port 6000...")
+    print("🎓 Starting main scraper server on port 5000...")
     subprocess.run([sys.executable, "main.py", "--mode", "server"])
 
 def main():
@@ -42,10 +42,10 @@ def main():
     
     print()
     print("🌐 Demo server started at: http://localhost:8080")
-    print("🎓 Main dashboard will be at: http://localhost:6000")
+    print("🎓 Main dashboard will be at: http://localhost:5000")
     print()
     print("📝 Instructions:")
-    print("1. Open http://localhost:6000 to access the main dashboard")
+    print("1. Open http://localhost:5000 to access the main dashboard")
     print("2. Scroll down to the 'Demo Notification System' section")
     print("3. Click 'Initialize Notifications' to set up the system")
     print("4. Add notifications using the embedded demo interface")

@@ -85,18 +85,18 @@ python -c "from data.storage import DataStorage; DataStorage().init_database()"
 
 ```bash
 # Run full server with web interface
-python main.py --mode server --port 6000
+python main.py --mode server --port 5000
 
 # Run single scraping cycle
 python main.py --mode single-run
 
 # Run web interface only
-python main.py --mode web --port 6000
+python main.py --mode web --port 5000
 ```
 
 ### Web Dashboard
 
-Access the web dashboard at `http://localhost:6000` to:
+Access the web dashboard at `http://localhost:5000` to:
 
 - View real-time system status
 - Monitor recent updates
@@ -225,9 +225,9 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-EXPOSE 6000
+EXPOSE 5000
 
-CMD ["python", "main.py", "--mode", "server", "--port", "6000"]
+CMD ["python", "main.py", "--mode", "server", "--port", "5000"]
 ```
 
 ### Docker Compose
@@ -239,7 +239,7 @@ services:
   exam-scraper:
     build: .
     ports:
-      - "6000:6000"
+      - "5000:5000"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -292,10 +292,10 @@ python cleanup_backups.py --all
 
 ```bash
 # Clean up old backups via API
-curl -X POST http://localhost:6000/backups/cleanup
+curl -X POST http://localhost:5000/backups/cleanup
 
 # Remove all backups via API
-curl -X POST http://localhost:6000/backups/cleanup-all
+curl -X POST http://localhost:5000/backups/cleanup-all
 ```
 
 ## 🤖 Webhook Integration
@@ -334,10 +334,10 @@ The system integrates with a chatbot API to send notifications automatically:
 
 ```bash
 # Send notifications to webhook
-curl -X POST http://localhost:6000/notifications/send-webhook
+curl -X POST http://localhost:5000/notifications/send-webhook
 
 # Test webhook connectivity
-curl -X POST http://localhost:6000/webhook/test
+curl -X POST http://localhost:5000/webhook/test
 ```
 
 ## 📊 Monitoring
