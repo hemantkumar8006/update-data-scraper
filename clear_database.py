@@ -28,20 +28,28 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from config.settings import DATABASE_PATH, JSON_BACKUP_PATH
-    from data.storage import DataStorage
-    from data.notification_manager import NotificationManager
+    from config.settings import DATABASE_URL, JSON_BACKUP_PATH
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Make sure you're running this script from the project root directory")
     sys.exit(1)
+
+# Try to import NotificationManager, but allow script to proceed without it (and without SQLAlchemy)
+NotificationManager = None
+try:
+    from data.notification_manager import NotificationManager as _NotificationManager
+    NotificationManager = _NotificationManager
+except Exception:
+    # Likely missing optional deps like SQLAlchemy; we'll degrade gracefully
+    NotificationManager = None
 
 
 class DatabaseCleaner:
     """Comprehensive database and data cleaning utility"""
     
     def __init__(self):
-        self.db_path = DATABASE_PATH
+        # Derive SQLite file path from DATABASE_URL for direct sqlite3 operations
+        self.db_path = self._resolve_db_path_from_url(DATABASE_URL)
         self.backup_dir = JSON_BACKUP_PATH
         self.data_dir = "data"
         
@@ -50,15 +58,59 @@ class DatabaseCleaner:
         self.notifications_file = os.path.join(self.data_dir, "updated_notifications.json")
         self.notification_queue_file = os.path.join(self.data_dir, "notification_queue.json")
         
-        # Initialize storage and notification manager
-        self.storage = DataStorage()
-        self.notification_manager = NotificationManager()
+        # Initialize notification manager if available
+        self.notification_manager = None
+        if NotificationManager is not None:
+            try:
+                self.notification_manager = NotificationManager()
+            except Exception:
+                # If initialization fails (e.g., missing SQLAlchemy), continue without it
+                self.notification_manager = None
         
         print(f"🗂️  Database Cleaner initialized")
         print(f"   - Database: {self.db_path}")
         print(f"   - Backup dir: {self.backup_dir}")
         print(f"   - Data dir: {self.data_dir}")
     
+    def _resolve_db_path_from_url(self, database_url: str | None) -> str:
+        """Resolve a filesystem path to the SQLite database from DATABASE_URL.
+
+        Falls back to the legacy default path if URL is missing or not sqlite.
+        """
+        # Default fallback to legacy path
+        default_path = os.path.join("data", "exam_updates.db")
+        if not database_url:
+            return default_path
+
+        if not database_url.lower().startswith("sqlite:"):
+            # Not a sqlite URL; we don't support direct file operations
+            # for other engines here. Fall back to default to avoid crashes.
+            return default_path
+
+        # Parse URL to extract path
+        try:
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(database_url)
+            raw_path = unquote(parsed.path or "")
+            # Handle leading slashes and Windows drive letters
+            # Examples:
+            #  - sqlite:///data/exam_updates.db  -> /data/exam_updates.db (relative)
+            #  - sqlite:////C:/path/to/db.db     -> /C:/path/to/db.db (absolute on Windows)
+            #  - sqlite://///mnt/data/db.db      -> //mnt/data/db.db (absolute on Unix)
+            path_candidate = raw_path
+            if os.name == 'nt' and len(path_candidate) >= 3 and path_candidate[0] == '/' and path_candidate[2] == ':':
+                # Strip leading slash before drive letter, e.g. /C:/...
+                path_candidate = path_candidate[1:]
+
+            # Make relative paths relative to project root (where this script lives)
+            project_root = os.path.dirname(os.path.abspath(__file__))
+            normalized = path_candidate.lstrip('/') if os.name != 'nt' else path_candidate
+            if not os.path.isabs(normalized):
+                return os.path.join(project_root, normalized)
+            return normalized
+        except Exception:
+            return default_path
+
     def get_database_stats(self):
         """Get current database statistics"""
         try:
@@ -376,12 +428,15 @@ class DatabaseCleaner:
                 except Exception as e:
                     print(f"❌ Error removing {file_path}: {e}")
         
-        # Clear notification queue using manager
-        try:
-            self.notification_manager.clear_queue()
-            files_cleared.append("notification_queue (via manager)")
-        except Exception as e:
-            print(f"⚠️  Error clearing notification queue: {e}")
+        # Clear notification queue using manager if available
+        if self.notification_manager is not None:
+            try:
+                self.notification_manager.clear_queue()
+                files_cleared.append("notification_queue (via manager)")
+            except Exception as e:
+                print(f"⚠️  Error clearing notification queue: {e}")
+        else:
+            print("ℹ️  NotificationManager unavailable; cleared files only")
         
         if files_cleared:
             print(f"✅ Cleared notification files: {', '.join(files_cleared)}")
