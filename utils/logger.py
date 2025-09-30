@@ -1,41 +1,50 @@
 import logging
-import os
+import json
 from datetime import datetime
-from config.settings import LOG_LEVEL, LOG_FILE
+from config.settings import LOG_LEVEL, LOG_FORMAT
 
 
-def setup_logging(log_level=LOG_LEVEL, log_file=LOG_FILE):
-    """Setup logging configuration"""
-    
-    # Create logs directory if it doesn't exist
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    
-    # Create formatter
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    
-    # Setup root logger
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'level': record.levelname,
+            'logger': record.name,
+            'message': record.getMessage(),
+        }
+        # Include extra fields if present
+        for key, value in record.__dict__.items():
+            if key not in (
+                'name', 'msg', 'args', 'levelname', 'levelno', 'pathname', 'filename',
+                'module', 'exc_info', 'exc_text', 'stack_info', 'lineno', 'funcName',
+                'created', 'msecs', 'relativeCreated', 'thread', 'threadName', 'processName',
+                'process', 'asctime'
+            ):
+                payload[key] = value
+        if record.exc_info:
+            payload['exc_info'] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def setup_logging(log_level: str = LOG_LEVEL, log_format: str = LOG_FORMAT):
+    """Setup logging to stdout. JSON format by default for production."""
     root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, log_level.upper()))
-    
+    root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+
     # Remove existing handlers
-    for handler in root_logger.handlers[:]:
+    for handler in list(root_logger.handlers):
         root_logger.removeHandler(handler)
-    
-    # File handler
-    file_handler = logging.FileHandler(log_file, encoding='utf-8')
-    file_handler.setLevel(getattr(logging, log_level.upper()))
-    file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
-    
-    # Console handler
+
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(getattr(logging, log_level.upper()))
-    console_handler.setFormatter(formatter)
+    if (log_format or 'json').lower() == 'json':
+        console_handler.setFormatter(JsonFormatter())
+    else:
+        console_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        ))
     root_logger.addHandler(console_handler)
-    
+
     return root_logger
 
 

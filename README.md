@@ -10,14 +10,17 @@ A comprehensive, production-ready system for scraping and monitoring exam update
 - **Robust Error Handling**: Exponential backoff, retry logic, and graceful degradation
 - **Web Dashboard**: Real-time monitoring and control interface
 - **RESTful API**: Complete API for integration with other systems
-- **Data Export**: JSON backups and SQLite database storage
+- **Data Export**: JSON backups and PostgreSQL database storage via SQLAlchemy
 - **Scalable Architecture**: Modular design for easy extension
 
 ## 📋 Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher (3.12 recommended)
 - API keys for AI services (OpenAI, Claude, or Gemini)
 - Internet connection for web scraping
+- One of:
+  - Local PostgreSQL 14+ (recommended), or
+  - Docker Desktop (for running PostgreSQL via docker-compose)
 
 ## 🛠️ Installation
 
@@ -25,7 +28,7 @@ A comprehensive, production-ready system for scraping and monitoring exam update
 
 ```bash
 git clone https://github.com/hemantkumar8006/update-data-scraper.git
-cd exam_scraper
+cd update-data-scraper
 ```
 
 ### 2. Create Virtual Environment
@@ -44,6 +47,9 @@ source venv/bin/activate
 
 ```bash
 pip install -r requirements.txt
+
+# (Recommended for production) create a lock file for deterministic builds
+pip freeze > requirements.lock.txt
 ```
 
 ### 4. Environment Setup
@@ -51,32 +57,79 @@ pip install -r requirements.txt
 Copy the example environment file and configure your API keys:
 
 ```bash
-cp env.example .env
+cp .env.example .env
 ```
 
-Edit `.env` file with your API keys:
+Edit `.env` file with your database and API keys (see `.env.example` for all options):
 
 ```env
-# API Keys (at least one required)
-OPENAI_API_KEY=your_openai_api_key_here
-CLAUDE_API_KEY=your_claude_api_key_here
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Email Notifications (Optional)
-NOTIFICATION_EMAIL=your_email@example.com
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
-
 # Environment
 ENVIRONMENT=development
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+
+# Web server
+WEB_HOST=0.0.0.0
+WEB_PORT=5000
+
+# Scraping
+SCRAPE_INTERVAL=1800
+MAX_RETRIES=3
+REQUEST_TIMEOUT=30
+USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36
+AI_BATCH_SIZE=5
+AI_RATE_LIMIT_DELAY=1
+MAX_CONCURRENT_REQUESTS=5
+CACHE_TTL=300
+
+# Database (PostgreSQL)
+# Preferred: set DATABASE_URL directly (example below)
+# DATABASE_URL=postgresql+psycopg2://exam_user:strong_password@localhost:5432/exam_updates
+DATABASE_URL=
+
+# If using docker-compose, these are composed into DATABASE_URL automatically
+DB_USER=exam_user
+DB_PASSWORD=change_me
+DB_HOST=db
+DB_NAME=exam_updates
+
+# Backups
+JSON_BACKUP_PATH=data/backups/
+
+# AI Keys (optional)
+OPENAI_API_KEY=
+CLAUDE_API_KEY=
+GEMINI_API_KEY=
+
+# Notifications (optional)
+ENABLE_NOTIFICATIONS=false
+NOTIFICATION_WEBHOOK_URL=
+NOTIFICATION_WEBHOOK_SECRET=
 ```
 
 ### 5. Initialize Database
 
 ```bash
-python -c "from data.storage import DataStorage; DataStorage().init_database()"
+# Ensure DATABASE_URL is set in .env first (or run docker-compose to start Postgres)
+python -c "from data.storage import DataStorage; DataStorage().init_database(); print('DB ready')"
+```
+
+### 6. Local Development Quickstart
+
+```bash
+# 1) Create and activate venv (see step 2)
+# 2) Install dependencies (step 3)
+# 3) Configure .env (step 4)
+# 4) Initialize DB (step 5)
+
+# Run full server with scheduler and web UI
+python main.py --mode server --port 5000
+
+# Run only one scraping cycle (no web UI)
+python main.py --mode single-run
+
+# Run only the web dashboard (no scheduler)
+python main.py --mode web --port 5000
 ```
 
 ## 🚀 Usage
@@ -84,14 +137,8 @@ python -c "from data.storage import DataStorage; DataStorage().init_database()"
 ### Command Line Options
 
 ```bash
-# Run full server with web interface
-python main.py --mode server --port 5000
-
-# Run single scraping cycle
-python main.py --mode single-run
-
-# Run web interface only
-python main.py --mode web --port 5000
+# See Local Development Quickstart above for common commands
+python main.py --help
 ```
 
 ### Web Dashboard
@@ -146,8 +193,7 @@ exam_scraper/
 │   ├── helpers.py           # Utility functions
 │   └── logger.py            # Logging utilities
 ├── tests/                   # Test files
-├── logs/                    # Log files
-├── data/                    # Database and backups
+├── data/                    # JSON backups, exporters, storage layer
 ├── main.py                  # Main application entry point
 ├── requirements.txt         # Python dependencies
 └── README.md               # This file
@@ -202,6 +248,15 @@ Modify `config/settings.py` to adjust:
 
 Implement custom AI processors by extending the base classes in `ai_processors/`.
 
+```
+AI is optional and used to enhance scraped updates.
+With API keys set (OpenAI/Claude/Gemini), it:
+Summarizes/cleans content for readability.
+Normalizes titles and extracts key metadata (dates, exam name, source).
+Assigns importance/priority to help downstream notifications.
+If no AI keys are provided, the system still scrapes and stores updates; AI steps are skipped.
+```
+
 ### Monitoring and Alerts
 
 The system includes comprehensive logging and monitoring:
@@ -210,46 +265,6 @@ The system includes comprehensive logging and monitoring:
 - Performance metrics tracking
 - Error rate monitoring
 - Database health checks
-
-## 🐳 Docker Deployment
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-
-EXPOSE 5000
-
-CMD ["python", "main.py", "--mode", "server", "--port", "5000"]
-```
-
-### Docker Compose
-
-```yaml
-version: "3.8"
-
-services:
-  exam-scraper:
-    build: .
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./config:/app/config
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-    restart: unless-stopped
-```
 
 ## 🧪 Testing
 
@@ -268,7 +283,7 @@ pytest tests/test_scrapers.py
 
 ## 🗂️ Backup Management
 
-The system automatically creates backups of `exam_data.json` before each update. To manage backups:
+The system automatically creates JSON snapshots in `data/backups/` when new updates are saved. For production-grade backups, use PostgreSQL `pg_dump` (see `DEPLOYMENT_GUIDE.md`).
 
 ### Automatic Cleanup
 
@@ -377,11 +392,28 @@ The system provides comprehensive monitoring through:
 
 ### Logs
 
-Check logs in the `logs/` directory for detailed error information:
+Logs are emitted to stdout in JSON format by default. For containers use:
 
 ```bash
-tail -f logs/scraper.log
+docker-compose logs -f app
 ```
+
+For local development you will see logs in the console; set `LOG_FORMAT=text` for human-readable output.
+
+## 🐳 Docker (Local or Production)
+
+```bash
+# Start full stack (Postgres, app, nginx)
+docker-compose up --build -d
+
+# View app logs
+docker-compose logs -f app
+
+# Stop stack
+docker-compose down
+```
+
+See `DEPLOYMENT_GUIDE.md` for production deployment and maintenance.
 
 ## 🤝 Contributing
 
@@ -420,7 +452,6 @@ The system automatically handles:
 - [ ] Mobile app integration
 - [ ] Machine learning for content classification
 - [ ] Multi-language support
-- [ ] Cloud deployment templates
 
 ---
 

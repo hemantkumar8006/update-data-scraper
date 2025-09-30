@@ -8,7 +8,8 @@ import os
 from datetime import datetime
 from flask import Flask, jsonify, request, render_template
 from mcp_server.server import MCPExamScrapingServer
-from config.settings import WEB_HOST, WEB_PORT
+from config.settings import WEB_HOST, WEB_PORT, ENVIRONMENT
+from utils.logger import setup_logging
 
 
 def create_web_interface(server_instance=None):
@@ -513,6 +514,22 @@ def create_web_interface(server_instance=None):
     return app
 
 
+def create_app():
+    """Application Factory used by Gunicorn"""
+    setup_logging()
+    logger = logging.getLogger(__name__)
+    logger.info("Creating Flask application", extra={'environment': ENVIRONMENT})
+    # In production, we usually run full server with scheduler
+    server = MCPExamScrapingServer()
+    app = create_web_interface(server)
+
+    # Start scheduler in a background thread when running via WSGI
+    server_thread = threading.Thread(target=server.start_scheduler)
+    server_thread.daemon = True
+    server_thread.start()
+    return app
+
+
 def main():
     parser = argparse.ArgumentParser(description='Exam Update Scraping Server')
     parser.add_argument('--mode', choices=['server', 'single-run', 'web'], 
@@ -525,10 +542,7 @@ def main():
     args = parser.parse_args()
     
     # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    setup_logging()
     logger = logging.getLogger(__name__)
     
     if args.mode == 'single-run':
@@ -548,19 +562,18 @@ def main():
         # Start full server with web interface
         logger.info("Starting MCP Exam Scraping Server...")
         server = MCPExamScrapingServer()
-        
         app = create_web_interface(server)
-        
+
         # Start server in background thread
         server_thread = threading.Thread(target=server.start_scheduler)
         server_thread.daemon = True
         server_thread.start()
-        
+
         # Start web interface
         logger.info(f"Starting web interface on {args.host}:{args.port}")
         logger.info(f"Visit http://{args.host}:{args.port}/ for dashboard")
         logger.info(f"API endpoints available at http://{args.host}:{args.port}/status")
-        
+
         try:
             app.run(host=args.host, port=args.port, debug=False)
         except KeyboardInterrupt:
@@ -570,4 +583,5 @@ def main():
 
 
 if __name__ == '__main__':
+    # Development-only entrypoint. In production, use: gunicorn -w 4 -k gthread 'main:create_app()'
     main()

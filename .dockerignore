@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Env
+.env
+.env.*
+
+# Venv
+venv/
+.venv/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Data & logs (mounted as volumes in prod)
+data/backups/
+data/exam_data.json
+data/exam_updates.db
+logs/
+
+# OS files
+Thumbs.db
+*.DS_Store
+
+

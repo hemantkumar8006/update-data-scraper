@@ -1,205 +1,143 @@
-import sqlite3
+# pyright: reportMissingImports=false
 import json
 import os
-import shutil
-import time
 import logging
-from datetime import datetime
-from config.settings import DATABASE_PATH, JSON_BACKUP_PATH
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Tuple
+
+from sqlalchemy import (
+    create_engine, MetaData, Table, Column, Integer, String, Text, Boolean,
+    DateTime, Float, Index, select, func, insert, delete
+)
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.orm import sessionmaker
+
+from config.settings import DATABASE_URL, JSON_BACKUP_PATH
 
 
 class DataStorage:
-    def __init__(self, db_path=DATABASE_PATH):
-        self.db_path = db_path
+    def __init__(self, database_url: str | None = None):
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.database_url = database_url or DATABASE_URL
+        if not self.database_url:
+            raise RuntimeError("DATABASE_URL is not set. Configure it via environment variables.")
+
+        # Engine and Session
+        self.engine: Engine = create_engine(self.database_url, pool_pre_ping=True)
+        self.SessionLocal = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
+
+        # Define metadata and tables
+        self.metadata = MetaData()
+        self.updates = Table(
+            'updates', self.metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('title', Text, nullable=False),
+            Column('content_summary', Text),
+            Column('source', String(255), nullable=False),
+            Column('exam_type', String(50), nullable=False),
+            Column('url', Text),
+            Column('date', String(50)),
+            Column('scraped_at', DateTime, nullable=False),
+            Column('content_hash', String(128), unique=True),
+            Column('priority', String(50)),
+            Column('is_new', Boolean, default=True),
+            Column('created_at', DateTime, server_default=func.now()),
+            Column('updated_at', DateTime, server_default=func.now(), onupdate=func.now()),
+            extend_existing=True,
+        )
+        Index('idx_content_hash', self.updates.c.content_hash)
+        Index('idx_source', self.updates.c.source)
+        Index('idx_scraped_at', self.updates.c.scraped_at)
+        Index('idx_exam_type', self.updates.c.exam_type)
+
+        self.scraping_log = Table(
+            'scraping_log', self.metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('source', String(255), nullable=False),
+            Column('status', String(50), nullable=False),
+            Column('updates_found', Integer, default=0),
+            Column('error_message', Text),
+            Column('duration_seconds', Float),
+            Column('scraped_at', DateTime, server_default=func.now()),
+            extend_existing=True,
+        )
+
         self.init_database()
 
-    def init_database(self):
-        """Initialize SQLite database"""
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Check if we need to migrate from old schema
-        self._migrate_database_if_needed(cursor)
-        
-        # Create updates table - simplified for raw scraped data
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS updates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                content_summary TEXT,
-                source TEXT NOT NULL,
-                exam_type TEXT NOT NULL,
-                url TEXT,
-                date TEXT,
-                scraped_at TEXT NOT NULL,
-                content_hash TEXT UNIQUE,
-                priority TEXT,
-                is_new BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Create indexes for better performance
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_content_hash ON updates(content_hash)
-        ''')
-        
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_source ON updates(source)
-        ''')
-        
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_scraped_at ON updates(scraped_at)
-        ''')
-        
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_exam_type ON updates(exam_type)
-        ''')
-        
-        # Create scraping_log table for monitoring
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS scraping_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source TEXT NOT NULL,
-                status TEXT NOT NULL,
-                updates_found INTEGER DEFAULT 0,
-                error_message TEXT,
-                duration_seconds REAL,
-                scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
-        self.logger.info("Database initialized successfully")
-
-    def _migrate_database_if_needed(self, cursor):
-        """Migrate database from old schema to new schema if needed"""
+    def init_database(self) -> None:
+        """Create tables and indexes if not exist."""
         try:
-            # Check if old columns exist
-            cursor.execute("PRAGMA table_info(updates)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            # If old AI-related columns exist, we need to migrate
-            if 'ai_summary' in columns or 'importance' in columns:
-                self.logger.info("Migrating database from old schema to new schema...")
-                
-                # Create new table with updated schema
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS updates_new (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        title TEXT NOT NULL,
-                        content_summary TEXT,
-                        source TEXT NOT NULL,
-                        exam_type TEXT NOT NULL,
-                        url TEXT,
-                        date TEXT,
-                        scraped_at TEXT NOT NULL,
-                        content_hash TEXT UNIQUE,
-                        priority TEXT,
-                        is_new BOOLEAN DEFAULT 1,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Copy data from old table to new table
-                cursor.execute('''
-                    INSERT INTO updates_new 
-                    (id, title, content_summary, source, exam_type, url, date, scraped_at, 
-                     content_hash, priority, is_new, created_at, updated_at)
-                    SELECT 
-                        id, title, content_summary, source, 
-                        CASE 
-                            WHEN LOWER(source) LIKE '%jee%' THEN 'JEE'
-                            WHEN LOWER(source) LIKE '%gate%' THEN 'GATE'
-                            WHEN LOWER(source) LIKE '%upsc%' THEN 'UPSC'
-                            ELSE 'OTHER'
-                        END as exam_type,
-                        url, date, scraped_at, content_hash, priority, is_new, created_at, updated_at
-                    FROM updates
-                ''')
-                
-                # Drop old table and rename new table
-                cursor.execute('DROP TABLE updates')
-                cursor.execute('ALTER TABLE updates_new RENAME TO updates')
-                
-                self.logger.info("Database migration completed successfully")
-                
-        except Exception as e:
-            self.logger.error(f"Database migration failed: {e}")
-            # If migration fails, we'll continue with the new schema
+            self.metadata.create_all(self.engine)
+            self.logger.info("Database initialized successfully")
+        except SQLAlchemyError as exc:
+            self.logger.error(f"Failed to initialize database: {exc}")
+            raise
 
-    def save_updates(self, updates):
-        """Save updates to database with duplicate detection"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        new_updates = []
-        
-        for update in updates:
-            try:
-                # Check if update already exists
-                cursor.execute('SELECT id FROM updates WHERE content_hash = ?', (update['content_hash'],))
-                if cursor.fetchone():
-                    continue  # Skip duplicate
-                
-                cursor.execute('''
-                    INSERT INTO updates 
-                    (title, content_summary, source, exam_type, url, date, scraped_at, 
-                     content_hash, priority)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    update['title'],
-                    update.get('content_summary', ''),
-                    update['source'],
-                    update.get('exam_type', self._determine_exam_type(update['source'])),
-                    update.get('url', ''),
-                    update.get('date', ''),
-                    update['scraped_at'],
-                    update['content_hash'],
-                    update.get('priority', 'medium')
-                ))
-                
-                if cursor.rowcount > 0:
-                    new_updates.append(update)
-                    
-            except sqlite3.Error as e:
-                self.logger.error(f"Database error saving update: {e}")
-                
-        conn.commit()
-        conn.close()
-        
-        # Save JSON backup
-        if new_updates:
-            self.save_json_backup(new_updates)
-            
-        return new_updates
+    def save_updates(self, updates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Save updates with duplicate detection based on content_hash."""
+        if not updates:
+            return []
 
-    def _determine_exam_type(self, source):
-        """Determine exam type based on source name"""
+        saved: List[Dict[str, Any]] = []
+        with self.engine.begin() as conn:
+            for upd in updates:
+                try:
+                    # Skip if content_hash exists
+                    if upd.get('content_hash'):
+                        exists_q = select(self.updates.c.id).where(
+                            self.updates.c.content_hash == upd['content_hash']
+                        )
+                        if conn.execute(exists_q).first():
+                            continue
+
+                    values = {
+                        'title': upd['title'],
+                        'content_summary': upd.get('content_summary', ''),
+                        'source': upd['source'],
+                        'exam_type': upd.get('exam_type', self._determine_exam_type(upd['source'])),
+                        'url': upd.get('url', ''),
+                        'date': upd.get('date', ''),
+                        'scraped_at': self._parse_datetime(upd.get('scraped_at')),
+                        'content_hash': upd.get('content_hash'),
+                        'priority': upd.get('priority', 'medium'),
+                        'is_new': True,
+                    }
+                    conn.execute(insert(self.updates).values(**values))
+                    saved.append(upd)
+                except IntegrityError:
+                    # Duplicate content_hash or constraint violation; skip
+                    continue
+                except SQLAlchemyError as exc:
+                    self.logger.error(f"DB error saving update: {exc}")
+        if saved:
+            self.save_json_backup(saved)
+        return saved
+
+    def _parse_datetime(self, dt_value: Any) -> datetime:
+        if isinstance(dt_value, datetime):
+            return dt_value
+        try:
+            # Accept ISO strings
+            return datetime.fromisoformat(str(dt_value))
+        except Exception:
+            return datetime.utcnow()
+
+    def _determine_exam_type(self, source: str) -> str:
         source_lower = source.lower()
         if 'jee' in source_lower:
             return 'JEE'
-        elif 'gate' in source_lower:
+        if 'gate' in source_lower:
             return 'GATE'
-        elif 'upsc' in source_lower:
+        if 'upsc' in source_lower:
             return 'UPSC'
-        else:
-            return 'OTHER'
+        return 'OTHER'
 
-    def save_json_backup(self, updates):
-        """Save updates as JSON backup"""
+    def save_json_backup(self, updates: List[Dict[str, Any]]) -> None:
         backup_dir = JSON_BACKUP_PATH
         os.makedirs(backup_dir, exist_ok=True)
-        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{backup_dir}/updates_{timestamp}.json"
-        
         try:
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(updates, f, indent=2, ensure_ascii=False)
@@ -207,239 +145,134 @@ class DataStorage:
         except Exception as e:
             self.logger.error(f"Failed to save JSON backup: {e}")
 
-    def get_recent_updates(self, hours=24, limit=100):
-        """Get recent updates from database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM updates 
-            WHERE datetime(scraped_at) > datetime('now', '-{} hours')
-            ORDER BY scraped_at DESC
-            LIMIT ?
-        '''.format(hours), (limit,))
-        
-        columns = [desc[0] for desc in cursor.description]
-        updates = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        conn.close()
-        return updates
+    def get_recent_updates(self, hours: int = 24, limit: int = 100) -> List[Dict[str, Any]]:
+        since = datetime.utcnow() - timedelta(hours=hours)
+        with self.engine.connect() as conn:
+            q = (
+                select(self.updates)
+                .where(self.updates.c.scraped_at > since)
+                .order_by(self.updates.c.scraped_at.desc())
+                .limit(limit)
+            )
+            rows = conn.execute(q).mappings().all()
+            return [dict(row) for row in rows]
 
-    def get_updates_by_source(self, source, limit=50):
-        """Get updates from specific source"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM updates 
-            WHERE source = ?
-            ORDER BY scraped_at DESC
-            LIMIT ?
-        ''', (source, limit))
-        
-        columns = [desc[0] for desc in cursor.description]
-        updates = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        conn.close()
-        return updates
+    def get_updates_by_source(self, source: str, limit: int = 50) -> List[Dict[str, Any]]:
+        with self.engine.connect() as conn:
+            q = (
+                select(self.updates)
+                .where(self.updates.c.source == source)
+                .order_by(self.updates.c.scraped_at.desc())
+                .limit(limit)
+            )
+            rows = conn.execute(q).mappings().all()
+            return [dict(row) for row in rows]
 
-    def get_updates_by_exam_type(self, exam_type, limit=50):
-        """Get updates by exam type"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM updates 
-            WHERE exam_type = ?
-            ORDER BY scraped_at DESC
-            LIMIT ?
-        ''', (exam_type, limit))
-        
-        columns = [desc[0] for desc in cursor.description]
-        updates = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        conn.close()
-        return updates
+    def get_updates_by_exam_type(self, exam_type: str, limit: int = 50) -> List[Dict[str, Any]]:
+        with self.engine.connect() as conn:
+            q = (
+                select(self.updates)
+                .where(self.updates.c.exam_type == exam_type)
+                .order_by(self.updates.c.scraped_at.desc())
+                .limit(limit)
+            )
+            rows = conn.execute(q).mappings().all()
+            return [dict(row) for row in rows]
 
-    def get_all_exam_types(self):
-        """Get all available exam types"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT DISTINCT exam_type, COUNT(*) as count
-            FROM updates 
-            GROUP BY exam_type
-            ORDER BY count DESC
-        ''')
-        
-        exam_types = cursor.fetchall()
-        conn.close()
-        
-        return [{'exam_type': row[0], 'count': row[1]} for row in exam_types]
+    def get_all_exam_types(self) -> List[Dict[str, Any]]:
+        with self.engine.connect() as conn:
+            q = (
+                select(self.updates.c.exam_type, func.count())
+                .group_by(self.updates.c.exam_type)
+                .order_by(func.count().desc())
+            )
+            rows = conn.execute(q).all()
+            return [{'exam_type': row[0], 'count': row[1]} for row in rows]
 
-    def check_existing_hash(self, content_hash):
-        """Check if content hash exists in database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT id FROM updates WHERE content_hash = ?', (content_hash,))
-        exists = cursor.fetchone() is not None
-        
-        conn.close()
-        return exists
+    def check_existing_hash(self, content_hash: str) -> bool:
+        with self.engine.connect() as conn:
+            q = select(self.updates.c.id).where(self.updates.c.content_hash == content_hash)
+            return conn.execute(q).first() is not None
 
-    def log_scraping_attempt(self, source, status, updates_found=0, error_message=None, duration=None):
-        """Log scraping attempt for monitoring"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO scraping_log 
-            (source, status, updates_found, error_message, duration_seconds)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (source, status, updates_found, error_message, duration))
-        
-        conn.commit()
-        conn.close()
+    def log_scraping_attempt(self, source: str, status: str, updates_found: int = 0, error_message: str | None = None, duration: float | None = None) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(
+                insert(self.scraping_log).values(
+                    source=source,
+                    status=status,
+                    updates_found=updates_found,
+                    error_message=error_message,
+                    duration_seconds=duration,
+                )
+            )
 
-    def get_scraping_stats(self, hours=24):
-        """Get scraping statistics"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT 
-                source,
-                COUNT(*) as total_attempts,
-                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_attempts,
-                SUM(updates_found) as total_updates,
-                AVG(duration_seconds) as avg_duration
-            FROM scraping_log 
-            WHERE datetime(scraped_at) > datetime('now', '-{} hours')
-            GROUP BY source
-        '''.format(hours))
-        
-        stats = cursor.fetchall()
-        conn.close()
-        
-        return [
-            {
-                'source': row[0],
-                'total_attempts': row[1],
-                'successful_attempts': row[2],
-                'total_updates': row[3],
-                'avg_duration': row[4] if row[4] else 0
-            }
-            for row in stats
-        ]
+    def get_scraping_stats(self, hours: int = 24) -> List[Dict[str, Any]]:
+        since = datetime.utcnow() - timedelta(hours=hours)
+        with self.engine.connect() as conn:
+            q = (
+                select(
+                    self.scraping_log.c.source,
+                    func.count().label('total_attempts'),
+                    func.sum(func.case((self.scraping_log.c.status == 'success', 1), else_=0)).label('successful_attempts'),
+                    func.sum(self.scraping_log.c.updates_found).label('total_updates'),
+                    func.avg(self.scraping_log.c.duration_seconds).label('avg_duration'),
+                )
+                .where(self.scraping_log.c.scraped_at > since)
+                .group_by(self.scraping_log.c.source)
+            )
+            rows = conn.execute(q).all()
+            return [
+                {
+                    'source': row[0],
+                    'total_attempts': row[1],
+                    'successful_attempts': row[2] or 0,
+                    'total_updates': row[3] or 0,
+                    'avg_duration': float(row[4]) if row[4] is not None else 0.0,
+                }
+                for row in rows
+            ]
 
-    def cleanup_old_data(self, days=30):
-        """Clean up old data to prevent database bloat"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Delete old updates (keep only recent ones)
-        cursor.execute('''
-            DELETE FROM updates 
-            WHERE datetime(scraped_at) < datetime('now', '-{} days')
-        '''.format(days))
-        
-        deleted_updates = cursor.rowcount
-        
-        # Delete old scraping logs
-        cursor.execute('''
-            DELETE FROM scraping_log 
-            WHERE datetime(scraped_at) < datetime('now', '-{} days')
-        '''.format(days))
-        
-        deleted_logs = cursor.rowcount
-        
-        conn.commit()
-        conn.close()
-        
-        self.logger.info(f"Cleanup completed: {deleted_updates} old updates and {deleted_logs} old logs deleted")
+    def cleanup_old_data(self, days: int = 30) -> Tuple[int, int]:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        with self.engine.begin() as conn:
+            del_updates = conn.execute(
+                delete(self.updates).where(self.updates.c.scraped_at < cutoff)
+            )
+            deleted_updates = del_updates.rowcount or 0
+
+            del_logs = conn.execute(
+                delete(self.scraping_log).where(self.scraping_log.c.scraped_at < cutoff)
+            )
+            deleted_logs = del_logs.rowcount or 0
+
+        self.logger.info(
+            f"Cleanup completed: {deleted_updates} old updates and {deleted_logs} old logs deleted"
+        )
         return deleted_updates, deleted_logs
 
-    def robust_save(self, updates):
-        """Save with database corruption handling"""
-        try:
-            return self.save_updates(updates)
-        except sqlite3.DatabaseError as e:
-            self.logger.error(f"Database error: {e}")
-            
-            # Try to backup and recreate database
-            backup_path = f"{self.db_path}.backup_{int(time.time())}"
-            try:
-                shutil.copy2(self.db_path, backup_path)
-                self.logger.info(f"Database backed up to: {backup_path}")
-            except Exception as backup_error:
-                self.logger.error(f"Backup failed: {backup_error}")
-            
-            # Reinitialize database
-            try:
-                os.remove(self.db_path)
-                self.init_database()
-                self.logger.info("Database reinitialized")
-                
-                # Retry save
-                return self.save_updates(updates)
-            except Exception as init_error:
-                self.logger.error(f"Database reinitialization failed: {init_error}")
-                raise
+    def get_database_stats(self) -> Dict[str, Any]:
+        with self.engine.connect() as conn:
+            total_updates = conn.execute(select(func.count()).select_from(self.updates)).scalar() or 0
 
-    def check_database_integrity(self):
-        """Check SQLite database integrity"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA integrity_check")
-            result = cursor.fetchone()[0]
-            conn.close()
-            return result == "ok"
-        except Exception as e:
-            self.logger.error(f"Database integrity check failed: {e}")
-            return False
+            updates_by_source_rows = conn.execute(
+                select(self.updates.c.source, func.count()).group_by(self.updates.c.source)
+            ).all()
+            updates_by_source = {row[0]: row[1] for row in updates_by_source_rows}
 
-    def get_database_stats(self):
-        """Get database statistics"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get total updates count
-        cursor.execute('SELECT COUNT(*) FROM updates')
-        total_updates = cursor.fetchone()[0]
-        
-        # Get updates by source
-        cursor.execute('''
-            SELECT source, COUNT(*) 
-            FROM updates 
-            GROUP BY source
-        ''')
-        updates_by_source = dict(cursor.fetchall())
-        
-        # Get updates by exam type
-        cursor.execute('''
-            SELECT exam_type, COUNT(*) 
-            FROM updates 
-            GROUP BY exam_type
-        ''')
-        updates_by_exam_type = dict(cursor.fetchall())
-        
-        # Get recent activity
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM updates 
-            WHERE datetime(scraped_at) > datetime('now', '-24 hours')
-        ''')
-        recent_updates = cursor.fetchone()[0]
-        
-        conn.close()
-        
+            updates_by_exam_type_rows = conn.execute(
+                select(self.updates.c.exam_type, func.count()).group_by(self.updates.c.exam_type)
+            ).all()
+            updates_by_exam_type = {row[0]: row[1] for row in updates_by_exam_type_rows}
+
+            recent_updates = conn.execute(
+                select(func.count()).select_from(self.updates).where(
+                    self.updates.c.scraped_at > datetime.utcnow() - timedelta(hours=24)
+                )
+            ).scalar() or 0
+
         return {
-            'total_updates': total_updates,
+            'total_updates': int(total_updates),
             'updates_by_source': updates_by_source,
             'updates_by_exam_type': updates_by_exam_type,
-            'recent_updates_24h': recent_updates,
-            'database_size_mb': round(os.path.getsize(self.db_path) / (1024 * 1024), 2)
+            'recent_updates_24h': int(recent_updates),
         }
